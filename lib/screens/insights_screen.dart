@@ -185,12 +185,12 @@ class _InsightsScreenState extends State<InsightsScreen> {
               if (filteredTx.isEmpty) const Text('No data for selected period.', style: TextStyle(color: Colors.white54))
               else ...[
                 _buildPatternInsightCard(icon: Icons.trending_up, iconColor: Colors.orangeAccent, title: 'Top Vendor: $highestVendor', subtitle: 'You spent the most here this period.'),
-                if (highestSub != null)
+                if (highestSub != null && lowestSub != null)
                   Row(
                     children: [
                       Expanded(child: _buildSmallStatCard('Highest Sub', highestSub.merchant, 'LKR ${highestSub.amount.toStringAsFixed(0)}', Colors.redAccent)),
                       const SizedBox(width: 12),
-                      Expanded(child: _buildSmallStatCard('Lowest Sub', lowestSub!.merchant, 'LKR ${lowestSub!.amount.toStringAsFixed(0)}', Colors.greenAccent)),
+                      Expanded(child: _buildSmallStatCard('Lowest Sub', lowestSub.merchant, 'LKR ${lowestSub.amount.toStringAsFixed(0)}', Colors.greenAccent)),
                     ],
                   ),
               ],

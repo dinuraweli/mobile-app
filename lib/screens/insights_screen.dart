@@ -23,14 +23,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
   // Consistent Category Colors for Stacked Chart and Donut
   final Map<String, Color> _categoryColors = {
-    'Food & Dining': Colors.orangeAccent,
     'Groceries': Colors.greenAccent,
     'Transport': Colors.blueAccent,
-    'Utilities': Colors.yellowAccent,
-    'Entertainment': Colors.purpleAccent,
+    'Dining': Colors.orangeAccent,
+    'Bills & Utilities': Colors.yellowAccent,
+    'Recurring Payments': Colors.tealAccent, // Replaced Subscriptions
     'Shopping': Colors.pinkAccent,
-    'Subscriptions': Colors.tealAccent,
-    'Other': Colors.grey,
+    'Transfers': Colors.purpleAccent,
+    'Income': Colors.lightGreenAccent,
+    'General': Colors.grey, // Replaced Other
   };
 
   @override
@@ -65,7 +66,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
   }
 
   bool _isSubscription(String merchant, String category) {
-    if (category == 'Subscriptions') return true;
+    if (category == 'Recurring Payments') return true; // Updated here
     final keywords = ['netflix', 'spotify', 'dialog', 'slt', 'mobitel', 'peo tv', 'pickme pass', 'daraz club', 'apple', 'google', 'zoom', 'canva'];
     return keywords.any((k) => merchant.toLowerCase().contains(k));
   }
@@ -193,6 +194,20 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       Expanded(child: _buildSmallStatCard('Lowest Sub', lowestSub.merchant, 'LKR ${lowestSub.amount.toStringAsFixed(0)}', Colors.greenAccent)),
                     ],
                   ),
+                // Smart Coaching Nudges
+                const SizedBox(height: 12),
+                ..._generateSmartCoaching(filteredTx).map((nudge) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: Colors.tealAccent.withOpacity(0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(children: [
+                      const Icon(Icons.lightbulb, color: Colors.tealAccent, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(nudge, style: const TextStyle(fontSize: 13, color: Colors.white))),
+                    ]),
+                  ),
+                )),
               ],
               const SizedBox(height: 24),
 
@@ -200,6 +215,22 @@ class _InsightsScreenState extends State<InsightsScreen> {
               const Text('Daily Usage', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
               _buildStackedBarChart(dailyCategoryTotals),
+              // Daily Reflections
+              if (dailyCategoryTotals.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                ..._generateReflections(dailyCategoryTotals.map((date, cats) => MapEntry(date, cats.values.fold(0, (sum, val) => sum + val)))).map((reflection) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: Colors.purpleAccent.withOpacity(0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(children: [
+                      const Icon(Icons.analytics, color: Colors.purpleAccent, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(reflection, style: const TextStyle(fontSize: 13, color: Colors.white))),
+                    ]),
+                  ),
+                )),
+              ],
               const SizedBox(height: 32),
 
               // 4. CATEGORY DONUT CHART
@@ -211,7 +242,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
 
               // 5. SUBSCRIPTIONS LIST
               if (uniqueSubscriptions.isNotEmpty) ...[
-                const Text('Active Subscriptions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Active Recurring Payments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), // Changed title here
                 const SizedBox(height: 12),
                 Card(
                   elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -238,28 +269,52 @@ class _InsightsScreenState extends State<InsightsScreen> {
     );
   }
 
-  // --- STACKED BAR CHART (SCREEN TIME STYLE) ---
+  // --- STACKED BAR CHART (7-DAY WEEK VIEW) ---
   Widget _buildStackedBarChart(Map<String, Map<String, double>> dailyData) {
     if (dailyData.isEmpty) return const SizedBox(height: 150, child: Center(child: Text('No chart data')));
 
-    // 1. Chronological Sorting
+    // 1. Group data strictly into a 7-day list (Mon -> Sun)
+    List<String> days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    // 2. Parse dates and determine the current week's Monday
     var dates = dailyData.keys.toList();
     dates.sort((a, b) => _parseDateStr(a).compareTo(_parseDateStr(b)));
 
-    // 2. Find Max and Average Daily Totals
-    double maxDaily = 0;
-    double totalSum = 0;
-    for (String date in dates) {
-      double dailyTotal = dailyData[date]!.values.fold(0, (a, b) => a + b);
-      if (dailyTotal > maxDaily) maxDaily = dailyTotal;
-      totalSum += dailyTotal;
-    }
-    if (maxDaily == 0) maxDaily = 1;
-    double avgDaily = dates.isNotEmpty ? totalSum / dates.length : 0;
-    double avgRatio = avgDaily / maxDaily;
+    DateTime? firstDate = dates.isNotEmpty ? _parseDateStr(dates.first) : null;
+    DateTime weekStart = firstDate ?? DateTime.now();
+    
+    // Calculate Monday of the week containing the first transaction
+    int daysToMonday = (weekStart.weekday - 1) % 7;
+    weekStart = weekStart.subtract(Duration(days: daysToMonday));
 
-    // We keep track of which categories are actually used to build the legend
+    // 3. Build a 7-day map
+    Map<int, Map<String, double>> weekData = {};
+    for (int i = 0; i < 7; i++) {
+      weekData[i] = {};
+    }
+
+    // 4. Populate the week data
+    for (String date in dates) {
+      DateTime dateObj = _parseDateStr(date);
+      int daysFromMonday = (dateObj.difference(weekStart).inDays) % 7;
+      
+      if (daysFromMonday >= 0 && daysFromMonday < 7) {
+        Map<String, double> categoriesForDay = dailyData[date]!;
+        categoriesForDay.forEach((category, amount) {
+          weekData[daysFromMonday]![category] = (weekData[daysFromMonday]![category] ?? 0) + amount;
+        });
+      }
+    }
+
+    // 5. Find max weekly total for scaling
+    double maxWeeklyTotal = 0;
     Set<String> usedCategories = {};
+    for (int i = 0; i < 7; i++) {
+      double dayTotal = weekData[i]!.values.fold(0, (a, b) => a + b);
+      if (dayTotal > maxWeeklyTotal) maxWeeklyTotal = dayTotal;
+      weekData[i]!.forEach((cat, _) => usedCategories.add(cat));
+    }
+    if (maxWeeklyTotal == 0) maxWeeklyTotal = 1;
 
     return Container(
       padding: const EdgeInsets.only(top: 16, bottom: 8),
@@ -268,64 +323,29 @@ class _InsightsScreenState extends State<InsightsScreen> {
         children: [
           // Chart Area
           SizedBox(
-            height: 180,
-            child: Stack(
-              children: [
-                // Average Dashed Line
-                if (avgDaily > 0)
-                  Positioned(
-                    bottom: 24 + (130 * avgRatio), 
-                    left: 0, right: 0,
-                    child: CustomPaint(painter: DashedLinePainter()),
-                  ),
-                // Horizontal Scroll for Bars
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  reverse: true, // Right aligned
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: dates.map((date) {
-                        Map<String, double> categoriesForDay = dailyData[date]!;
-                        double dailyTotal = categoriesForDay.values.fold(0, (a, b) => a + b);
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              Tooltip(
-                                message: 'LKR ${dailyTotal.toStringAsFixed(0)}',
-                                preferBelow: false, verticalOffset: 10,
-                                child: Container(
-                                  width: 24,
-                                  height: 130, // Fixed track height
-                                  alignment: Alignment.bottomCenter,
-                                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(4)),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: categoriesForDay.entries.map((entry) {
-                                      usedCategories.add(entry.key);
-                                      double hRatio = entry.value / maxDaily;
-                                      return Container(
-                                        width: 24,
-                                        height: 130 * hRatio,
-                                        color: _categoryColors[entry.key] ?? _categoryColors['Other'],
-                                      );
-                                    }).toList(),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(date.replaceAll('-', '\n'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.white54, fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ],
+            height: 200,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(7, (index) {
+                  double dailyTotal = weekData[index]!.values.fold(0, (a, b) => a + b);
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Tooltip(
+                        message: 'LKR ${dailyTotal.toStringAsFixed(0)}',
+                        preferBelow: false,
+                        verticalOffset: 10,
+                        child: _buildDayBar(dailyTotal, maxWeeklyTotal, weekData[index]!),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(days[index], style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600)),
+                    ],
+                  );
+                }),
+              ),
             ),
           ),
           // Legend Area
@@ -333,19 +353,52 @@ class _InsightsScreenState extends State<InsightsScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16),
               child: Wrap(
-                spacing: 12, runSpacing: 8,
+                spacing: 12,
+                runSpacing: 8,
                 alignment: WrapAlignment.center,
                 children: usedCategories.map((cat) => Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(width: 10, height: 10, decoration: BoxDecoration(color: _categoryColors[cat] ?? _categoryColors['Other'], borderRadius: BorderRadius.circular(2))),
+                    Container(width: 10, height: 10, decoration: BoxDecoration(color: _categoryColors[cat] ?? _categoryColors['General'], borderRadius: BorderRadius.circular(2))),
                     const SizedBox(width: 4),
                     Text(cat, style: const TextStyle(fontSize: 10, color: Colors.white70)),
                   ],
                 )).toList(),
               ),
-            )
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDayBar(double dailyTotal, double maxWeeklyTotal, Map<String, double> categories) {
+    const double trackHeight = 150.0;
+    double heightRatio = maxWeeklyTotal > 0 ? (dailyTotal / maxWeeklyTotal) : 0;
+    double fillHeight = trackHeight * heightRatio;
+
+    return Container(
+      height: trackHeight,
+      width: 32,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.bottomCenter,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: fillHeight,
+          width: 32,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: categories.entries.map((cat) {
+              return Container(
+                height: fillHeight > 0 ? fillHeight * (cat.value / dailyTotal) : 0,
+                color: _categoryColors[cat.key],
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }
@@ -365,7 +418,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: data.entries.map((e) {
-            Color color = _categoryColors[e.key] ?? _categoryColors['Other']!;
+            Color color = _categoryColors[e.key] ?? _categoryColors['General']!;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4.0),
               child: Row(children: [
@@ -387,20 +440,47 @@ class _InsightsScreenState extends State<InsightsScreen> {
   Widget _buildSmallStatCard(String title, String day, String amount, Color amountColor) {
     return Card(elevation: 2, child: Padding(padding: const EdgeInsets.all(12.0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 12, color: Colors.white70)), const SizedBox(height: 4), Text(day, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), const SizedBox(height: 4), Text(amount, style: TextStyle(fontWeight: FontWeight.bold, color: amountColor, fontSize: 16))])));
   }
-}
 
-class DashedLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    double dashWidth = 5, dashSpace = 5, startX = 0;
-    final paint = Paint()..color = Colors.green.withValues(alpha: 0.7)..strokeWidth = 1;
-    while (startX < size.width) {
-      canvas.drawLine(Offset(startX, 0), Offset(startX + dashWidth, 0), paint);
-      startX += dashWidth + dashSpace;
+  List<String> _generateSmartCoaching(List<AppTransaction> txs) {
+    List<String> nudges = [];
+    DateTime now = DateTime.now();
+
+    // Salary Week Check
+    if (now.day >= 25 || now.day <= 5) {
+      nudges.add("It's salary week! Are we saving or spending?");
     }
+    
+    // Credit Card Check
+    bool hasCreditCard = txs.any((t) => t.accountType == 'Credit Card');
+    if (hasCreditCard && now.day > 20) {
+      nudges.add("Don't postpone paying your credit card. Avoid extra charges by paying early.");
+    }
+
+    // Subscription Check
+    double subTotal = txs.where((t) => t.category == 'Recurring Payments').fold(0, (sum, t) => sum + t.amount);
+    if (subTotal > 0) {
+      nudges.add("Your subscription payments are coming up. You spent LKR ${subTotal.toStringAsFixed(0)} on them recently.");
+    }
+
+    if (nudges.isEmpty) nudges.add("Quick tip: Tracking daily helps you save 20% more monthly!");
+    return nudges;
   }
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
+
+  List<String> _generateReflections(Map<String, double> dailyTotals) {
+    List<String> reflections = [];
+    
+    if (dailyTotals.isNotEmpty) {
+      var sortedDays = dailyTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      var highestDay = sortedDays.first;
+      var lowestDay = sortedDays.last;
+
+      reflections.add("Your expenses peaked on ${highestDay.key} at LKR ${highestDay.value.toStringAsFixed(0)}.");
+      if (lowestDay.value > 0) {
+        reflections.add("Great job on ${lowestDay.key}! You kept spending down to LKR ${lowestDay.value.toStringAsFixed(0)}.");
+      }
+    }
+    return reflections;
+  }
 }
 
 class DonutChartPainter extends CustomPainter {
@@ -416,7 +496,7 @@ class DonutChartPainter extends CustomPainter {
     final paint = Paint()..style = PaintingStyle.stroke..strokeWidth = strokeWidth..strokeCap = StrokeCap.butt;
     data.forEach((key, value) {
       final sweepAngle = (value * 2 * 3.141592653589793);
-      paint.color = colorMap[key] ?? colorMap['Other']!;
+      paint.color = colorMap[key] ?? colorMap['General']!;
       canvas.drawArc(Rect.fromCircle(center: center, radius: radius - (strokeWidth / 2)), startAngle, sweepAngle, false, paint);
       startAngle += sweepAngle;
     });

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:telephony/telephony.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // 1. Add this import
 
 // Import your existing models and utilities
 import '../models/transaction.dart';
@@ -36,6 +37,7 @@ class _MainNavigationState extends State<MainNavigation> {
   void initState() {
     super.initState();
     _initSmsListener();
+    _checkPendingSms();
   }
 
   void _initSmsListener() async {
@@ -53,9 +55,41 @@ class _MainNavigationState extends State<MainNavigation> {
             debugPrint("Ignored non-transactional or promotional SMS from $sender.");
           }
         },
-        listenInBackground: false, 
+        listenInBackground: false,
       );
     }
+  }
+
+  Future<void> _checkPendingSms() async {
+    if (!Hive.isBoxOpen('pending_sms')) {
+      await Hive.openBox<String>('pending_sms');
+    }
+
+    var box = Hive.box<String>('pending_sms');
+
+    if (box.isEmpty) {
+      debugPrint('No pending background SMS.');
+      return;
+    }
+
+    debugPrint('Found ${box.length} pending SMS messages!');
+
+    for (int i = 0; i < box.length; i++) {
+      String? rawSms = box.getAt(i);
+
+      if (rawSms != null && rawSms.isNotEmpty) {
+        // TODO: Pass 'rawSms' to your Gemini Service here!
+        // Example: await _geminiService.extractSmsData(rawSms);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Processing background transaction...')),
+          );
+        }
+      }
+    }
+
+    await box.clear();
   }
 
   Future<void> _extractTransactionWithGemini(String smsBody) async {
@@ -82,13 +116,15 @@ class _MainNavigationState extends State<MainNavigation> {
       final newTransaction = AppTransaction(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         bank: data['bank']?.toString() ?? 'Unknown Bank',
+        bankName: data['bankName']?.toString() ?? data['bank']?.toString() ?? 'Unknown Bank',
         amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
         merchant: data['merchant']?.toString() ?? 'Unknown',
         type: data['type']?.toString() ?? 'Debit',
-        date: "Today", 
+        date: "Today",
         category: data['category']?.toString() ?? 'Other',
         accountType: 'Account',
         accountMask: data['accountMask']?.toString() ?? '',
+        availableBalance: data['availableBalance'] != null ? double.tryParse(data['availableBalance'].toString()) : null,
       );
 
       if (newTransaction.amount > 0) {

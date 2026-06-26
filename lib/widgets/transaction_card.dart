@@ -61,7 +61,11 @@ class TransactionCard extends StatelessWidget {
   void _openEditDialog(BuildContext context) {
     final amtCtrl = TextEditingController(text: transaction.amount.toString());
     final merCtrl = TextEditingController(text: transaction.merchant);
-    final catList = ['Food & Dining', 'Groceries', 'Transport', 'Utilities', 'Entertainment', 'Shopping', 'Subscriptions', 'Other'];
+    // Ensure these exactly match what we will tell the Gemini API to use!
+    final catList = [
+      'Groceries', 'Transport', 'Dining', 'Bills & Utilities', 
+      'Recurring Payments', 'Shopping', 'Transfers', 'Income', 'General'
+    ];
     String selCat = catList.contains(transaction.category) ? transaction.category : 'Other';
 
     showDialog(
@@ -92,9 +96,17 @@ class TransactionCard extends StatelessWidget {
               onPressed: () {
                 double newAmt = double.tryParse(amtCtrl.text) ?? transaction.amount;
                 AppTransaction updated = AppTransaction(
-                  id: transaction.id, bank: transaction.bank, amount: newAmt, merchant: merCtrl.text,
-                  type: transaction.type, date: transaction.date, category: selCat,
-                  accountType: transaction.accountType, accountMask: transaction.accountMask
+                  id: transaction.id,
+                  bank: transaction.bank,
+                  bankName: transaction.bankName,
+                  amount: newAmt,
+                  merchant: merCtrl.text,
+                  type: transaction.type,
+                  date: transaction.date,
+                  category: selCat,
+                  accountType: transaction.accountType,
+                  accountMask: transaction.accountMask,
+                  availableBalance: transaction.availableBalance,
                 );
                 onEdit(transaction, updated);
                 Navigator.pop(context);
@@ -117,10 +129,23 @@ class TransactionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     IconData categoryIcon = Icons.receipt_long;
-    if (transaction.category == 'Food & Dining') categoryIcon = Icons.fastfood;
-    if (transaction.category == 'Groceries') categoryIcon = Icons.shopping_cart;
-    if (transaction.category == 'Transport') categoryIcon = Icons.local_taxi;
+    
+    // Map the new strict AI categories to Material Icons
+    switch (transaction.category) {
+      case 'Groceries': categoryIcon = Icons.shopping_cart; break;
+      case 'Transport': categoryIcon = Icons.local_taxi; break;
+      case 'Dining': categoryIcon = Icons.fastfood; break;
+      case 'Bills & Utilities': categoryIcon = Icons.bolt; break;
+      case 'Recurring Payments': categoryIcon = Icons.autorenew; break; // Replaced Subscriptions
+      case 'Shopping': categoryIcon = Icons.shopping_bag; break;
+      case 'Transfers': categoryIcon = Icons.swap_horiz; break;
+      case 'Income': categoryIcon = Icons.account_balance_wallet; break;
+      case 'General': default: categoryIcon = Icons.category; break;
+    }
+
     String accString = transaction.accountMask.isNotEmpty ? ' (**${transaction.accountMask})' : '';
+
+    // ... rest of your build method remains exactly the same!
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),

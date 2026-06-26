@@ -31,12 +31,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final _manualAccountMaskController = TextEditingController();
   
   String _selectedBank = 'Commercial Bank';
-  String _selectedCategory = 'Food & Dining';
+  String _selectedCategory = 'Dining'; // Updated default
   String _selectedType = 'Debit';
   String _selectedAccountType = 'Debit/Account';
 
   final List<String> _banks = ['Commercial Bank', 'BOC', 'Sampath Bank', 'HNB', 'NDB', 'HSBC', 'NTB', 'Cash/Other'];
-  final List<String> _categories = ['Food & Dining', 'Groceries', 'Transport', 'Utilities', 'Entertainment', 'Shopping', 'Subscriptions', 'Other'];
+  // The Strict Category List!
+  final List<String> _categories = ['Groceries', 'Transport', 'Dining', 'Bills & Utilities', 'Recurring Payments', 'Shopping', 'Transfers', 'Income', 'General'];
   final List<String> _accountTypes = ['Debit/Account', 'Credit Card'];
 
   @override
@@ -55,10 +56,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           "\nUser's learned category preferences (use strictly if matched): ${jsonEncode(widget.learningRules)}";
 
       final systemInstruction = Content.system(
-        'You are a financial data extraction bot. Analyze the SMS text and extract the information into a strict JSON object (NOT an array). '
-        'Categorize food delivery like Uber Eats or PickMe Food strictly as "Food & Dining". '
-        'Keys must exactly match: "bank", "amount" (number), "merchant", "category", "type" (Debit/Credit), "date" (string DD-MMM), '
-        '"account_type" (Credit Card, Debit/Account, or Unknown), "account_mask". $rulesPrompt'
+        'You are a financial data extraction bot for a Sri Lankan finance app. '
+        'Analyze the SMS text and extract the information into a strict JSON object (NOT an array). '
+        '\n\nCRITICAL RULES:\n'
+        '1. The "category" field MUST be chosen exactly from this list, and no other words: '
+        '["Groceries", "Transport", "Dining", "Bills & Utilities", "Recurring Payments", "Shopping", "Transfers", "Income", "General"].\n'
+        '2. Use "Recurring Payments" ONLY if it represents a regular subscription or scheduled bill (e.g., Netflix, Spotify, Dialog postpaid, SLT, CEB, Water Board).\n'
+        '3. Keys must exactly match: "bank", "amount" (number), "merchant", "category", "type" (Debit/Credit), "date" (string DD-MMM), "account_type", "account_mask". $rulesPrompt'
       );
       final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _apiKey, systemInstruction: systemInstruction, generationConfig: GenerationConfig(responseMimeType: 'application/json', temperature: 0.1));
       final response = await model.generateContent([Content.text(_smsController.text)]);
@@ -81,9 +85,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (parsedJson['amount'] != null) extractedAmount = double.tryParse(parsedJson['amount'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
 
       final newTransaction = AppTransaction(
-        bank: parsedJson['bank']?.toString() ?? 'Unknown', amount: extractedAmount, merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
-        type: parsedJson['type']?.toString() ?? 'Debit', date: parsedJson['date']?.toString() ?? 'Unknown Date',
-        category: parsedJson['category']?.toString() ?? 'Other', accountType: parsedJson['account_type']?.toString() ?? 'Unknown', accountMask: parsedJson['account_mask']?.toString() ?? '',
+        bank: parsedJson['bank']?.toString() ?? 'Unknown',
+        bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Unknown',
+        amount: extractedAmount,
+        merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
+        type: parsedJson['type']?.toString() ?? 'Debit',
+        date: parsedJson['date']?.toString() ?? 'Unknown Date',
+        category: parsedJson['category']?.toString() ?? 'General',
+        accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
+        accountMask: parsedJson['account_mask']?.toString() ?? '',
+        availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
       );
       
       widget.onTransactionExtracted(newTransaction);
@@ -112,8 +123,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
       final systemInstruction = Content.system(
         'You are a receipt data extraction bot. Analyze the image and extract the receipt information into a strict JSON object (NOT an array). '
-        'Keys must exactly match: "bank" (default to "Cash/Other" if not clear), "amount" (number), "merchant", "category", "type" (usually "Debit"), "date" (string DD-MMM), '
-        '"account_type" (Unknown), "account_mask". $rulesPrompt'
+        '\n\nCRITICAL RULES:\n'
+        '1. The "category" field MUST be chosen exactly from this list, and no other words: '
+        '["Groceries", "Transport", "Dining", "Bills & Utilities", "Recurring Payments", "Shopping", "Transfers", "Income", "General"].\n'
+        '2. Keys must exactly match: "bank" (default to "Cash/Other" if not clear), "amount" (number), "merchant", "category", "type" (usually "Debit"), "date" (string DD-MMM), "account_type" (Unknown), "account_mask". $rulesPrompt'
       );
 
       final model = GenerativeModel(
@@ -149,14 +162,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (parsedJson['amount'] != null) extractedAmount = double.tryParse(parsedJson['amount'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
 
       final newTransaction = AppTransaction(
-        bank: parsedJson['bank']?.toString() ?? 'Cash/Other', 
-        amount: extractedAmount, 
+        bank: parsedJson['bank']?.toString() ?? 'Cash/Other',
+        bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Cash/Other',
+        amount: extractedAmount,
         merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
-        type: parsedJson['type']?.toString() ?? 'Debit', 
+        type: parsedJson['type']?.toString() ?? 'Debit',
         date: parsedJson['date']?.toString() ?? 'Today',
-        category: parsedJson['category']?.toString() ?? 'Other', 
-        accountType: parsedJson['account_type']?.toString() ?? 'Unknown', 
+        category: parsedJson['category']?.toString() ?? 'General',
+        accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
         accountMask: parsedJson['account_mask']?.toString() ?? '',
+        availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
       );
       
       widget.onTransactionExtracted(newTransaction);
@@ -175,8 +190,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (_formKey.currentState!.validate()) {
       double amount = double.tryParse(_manualAmountController.text) ?? 0.0;
       widget.onTransactionExtracted(AppTransaction(
-        bank: _selectedBank, amount: amount, merchant: _manualMerchantController.text, type: _selectedType, date: _manualDateController.text.isNotEmpty ? _manualDateController.text : 'Today',
-        category: _selectedCategory, accountType: _selectedAccountType, accountMask: _manualAccountMaskController.text,
+        bank: _selectedBank,
+        bankName: _selectedBank,
+        amount: amount,
+        merchant: _manualMerchantController.text,
+        type: _selectedType,
+        date: _manualDateController.text.isNotEmpty ? _manualDateController.text : 'Today',
+        category: _selectedCategory,
+        accountType: _selectedAccountType,
+        accountMask: _manualAccountMaskController.text,
+        availableBalance: null,
       ));
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📝 Manual transaction added!'), backgroundColor: Colors.green));
       Navigator.pop(context); 

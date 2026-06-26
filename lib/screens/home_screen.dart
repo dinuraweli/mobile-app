@@ -25,39 +25,73 @@ class HomeScreen extends StatelessWidget {
   });
 
   void _showBankBalancesDialog(BuildContext context, Map<String, double> balances, double total) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      backgroundColor: const Color(0xFF1F2833),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24))
+      ),
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Tracked Accounts'),
-          content: SingleChildScrollView(
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 5, 
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))
+                  )
+                ),
+                const SizedBox(height: 24),
+                const Text('Tracked Accounts', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 16),
                 if (balances.isEmpty)
                   const Text('No transactions recorded yet.', style: TextStyle(color: Colors.white54)),
                 ...balances.entries.map((e) => _buildBankBalanceRow(e.key, e.value)),
-                const Divider(thickness: 2),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Divider(color: Colors.white24, thickness: 1),
+                ),
                 _buildBankBalanceRow('Total Net Tracked', total, isTotal: true),
+                const SizedBox(height: 16),
               ],
             ),
           ),
-          actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
         );
       },
     );
   }
 
   Widget _buildBankBalanceRow(String bank, double amount, {bool isTotal = false}) {
-    bool isCreditCardOwed = bank.contains('Credit Card') && amount < 0;
+    bool isCreditCardOwed = bank.toLowerCase().contains('credit') && amount < 0;
     final formattedAmount = NumberFormat('#,##0.00').format(amount);
+    
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Text(bank, style: TextStyle(fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, fontSize: isTotal ? 16 : 13))),
-          Text('LKR $formattedAmount', style: TextStyle(fontWeight: isTotal ? FontWeight.bold : FontWeight.normal, fontSize: isTotal ? 16 : 14, color: isCreditCardOwed ? Colors.orangeAccent : (amount < 0 ? Colors.redAccent : Colors.white))),
+          Expanded(
+            child: Text(
+              bank, 
+              style: TextStyle(
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.w500, 
+                fontSize: isTotal ? 16 : 15,
+                color: isTotal ? Colors.white : Colors.white70
+              )
+            )
+          ),
+          Text(
+            'LKR $formattedAmount', 
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600, 
+              fontSize: isTotal ? 16 : 15, 
+              color: isCreditCardOwed ? Colors.orangeAccent : (amount < 0 ? Colors.redAccent : (isTotal ? const Color(0xFF66FCF1) : Colors.white))
+            )
+          ),
         ],
       ),
     );

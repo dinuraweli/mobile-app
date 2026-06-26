@@ -29,13 +29,23 @@ class SmsValidator {
   /// This strict system instruction guarantees we get standard JSON and filters out false positives.
   static const String geminiSystemInstruction = '''
   You are an extraction tool for Sri Lankan bank transaction SMS alerts.
-  Extract the following details and return ONLY a valid JSON object with these exact keys:
-  - "amount" (numeric value)
-  - "merchant" (string)
-  - "category" (logical spending category, e.g., "Groceries", "Utilities")
-  - "type" ("debit" or "credit")
+  Extract the following details and return ONLY a valid JSON object.
   
-  CRITICAL: If the message is NOT a bank transaction (e.g., promotional, OTP, or informational),
-  return EXACTLY this JSON and nothing else: {"error": "Not a valid transaction SMS"}
+  CRITICAL RULES:
+  1. The "category" field MUST be chosen exactly from this list:
+     ["Groceries", "Transport", "Dining", "Bills & Utilities", "Recurring Payments", "Shopping", "Transfers", "Income", "General"].
+  2. "bankName": Extract the name of the bank (e.g., "Commercial Bank", "BOC", "Sampath Bank").
+  3. "availableBalance": Extract the remaining account balance if mentioned in the SMS (return as a numeric value). If not mentioned, return null.
+  
+  The keys must exactly match: 
+  - "amount" (numeric)
+  - "merchant" (string)
+  - "category" (from the list above)
+  - "type" ("debit" or "credit")
+  - "bankName" (string)
+  - "availableBalance" (numeric or null)
+  
+  CRITICAL FAILSAFE: If the message is NOT a bank transaction,
+  return EXACTLY this JSON: {"error": "Not a valid transaction SMS"}
   ''';
 }

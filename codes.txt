@@ -1,0 +1,1752 @@
+transaction.dart
+File: lib/models/transaction.dart
+
+class AppTransaction {
+  final String id;
+  final String bank;
+  final String bankName;
+  final double amount;
+  final String merchant;
+  final String type;
+  final String date;
+  final String category;
+  final String accountType;
+  final String accountMask;
+  final double? availableBalance;
+
+  AppTransaction({
+    String? id,
+    required this.bank,
+    this.bankName = '',
+    required this.amount,
+    required this.merchant,
+    required this.type,
+    required this.date,
+    required this.category,
+    this.accountType = 'Unknown',
+    this.accountMask = '',
+    this.availableBalance,
+  }) : id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'bank': bank,
+        'bankName': bankName,
+        'amount': amount,
+        'merchant': merchant,
+        'type': type,
+        'date': date,
+        'category': category,
+        'accountType': accountType,
+        'accountMask': accountMask,
+        'availableBalance': availableBalance,
+      };
+
+  factory AppTransaction.fromJson(Map<String, dynamic> json) => AppTransaction(
+        id: json['id'],
+        bank: json['bank'],
+        bankName: json['bankName'] ?? '',
+        amount: json['amount'],
+        merchant: json['merchant'],
+        type: json['type'],
+        date: json['date'],
+        category: json['category'],
+        accountType: json['accountType'] ?? 'Unknown',
+        accountMask: json['accountMask'] ?? '',
+        availableBalance: json['availableBalance'] != null ? double.tryParse(json['availableBalance'].toString()) : null,
+      );
+}
+
+File: lib/screens/add_transaction_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
+import '../models/transaction.dart';
+
+class AddTransactionScreen extends StatefulWidget {
+  final Function(AppTransaction) onTransactionExtracted;
+  final Map<String, String> learningRules;
+
+  const AddTransactionScreen({super.key, required this.onTransactionExtracted, required this.learningRules});
+
+  @override
+  State<AddTransactionScreen> createState() => _AddTransactionScreenState();
+}
+
+class _AddTransactionScreenState extends State<AddTransactionScreen> {
+  final String _apiKey = '';
+  final TextEditingController _smsController = TextEditingController();
+  bool _isLoadingSms = false;
+  String _extractedJsonSms = '';
+  final String _sampleSms = "Acct 4432 debited LKR 3,450.00 at UBER EATS on 24-MAY. Bal: LKR 12,700.00. ComBank.";
+  
+  bool _isScanningReceipt = false;
+  final ImagePicker _picker = ImagePicker();
+  
+  final _formKey = GlobalKey<FormState>();
+  final _manualAmountController = TextEditingController();
+  final _manualMerchantController = TextEditingController();
+  final _manualDateController = TextEditingController();
+  final _manualAccountMaskController = TextEditingController();
+  
+  String _selectedBank = 'Commercial Bank';
+  String _selectedCategory = 'Dining'; // Updated default
+  String _selectedType = 'Debit';
+  String _selectedAccountType = 'Debit/Account';
+
+  final List<String> _banks = ['Commercial Bank', 'BOC', 'Sampath Bank', 'HNB', 'NDB', 'HSBC', 'NTB', 'Cash/Other'];
+  // The Strict Category List!
+  final List<String> _categories = ['Groceries', 'Transport', 'Dining', 'Bills & Utilities', 'Recurring Payments', 'Shopping', 'Transfers', 'Income', 'General'];
+  final List<String> _accountTypes = ['Debit/Account', 'Credit Card'];
+
+  @override
+  void dispose() {
+    _smsController.dispose(); _manualAmountController.dispose(); _manualMerchantController.dispose(); _manualDateController.dispose(); _manualAccountMaskController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _extractSmsData() async {
+    if (_smsController.text.trim().isEmpty) return;
+    setState(() { _isLoadingSms = true; _extractedJsonSms = 'Connecting to Gemini AI...'; });
+    
+    String rawText = ''; 
+    try {
+      String rulesPrompt = widget.learningRules.isEmpty ? "" : 
+          "\nUser's learned category preferences (use strictly if matched): ${jsonEncode(widget.learningRules)}";
+
+      final systemInstruction = Content.system(
+        'You are a financial data extraction bot for a Sri Lankan finance app. '
+        'Analyze the SMS text and extract the information into a strict JSON object (NOT an array). '
+        '\n\nCRITICAL RULES:\n'
+        '1. The "category" field MUST be chosen exactly from this list, and no other words: '
+        '["Groceries", "Transport", "Dining", "Bills & Utilities", "Recurring Payments", "Shopping", "Transfers", "Income", "General"].\n'
+        '2. Use "Recurring Payments" ONLY if it represents a regular subscription or scheduled bill (e.g., Netflix, Spotify, Dialog postpaid, SLT, CEB, Water Board).\n'
+        '3. Keys must exactly match: "bank", "amount" (number), "merchant", "category", "type" (Debit/Credit), "date" (string DD-MMM), "account_type", "account_mask". $rulesPrompt'
+      );
+      final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _apiKey, systemInstruction: systemInstruction, generationConfig: GenerationConfig(responseMimeType: 'application/json', temperature: 0.1));
+      final response = await model.generateContent([Content.text(_smsController.text)]);
+      
+      if (!mounted) return;
+      rawText = response.text ?? '{}';
+      
+      final String tripleTicks = String.fromCharCode(96) * 3;
+      rawText = rawText.replaceAll('$tripleTicks json', '').replaceAll(tripleTicks, '').trim();
+      if (rawText.startsWith('[')) rawText = rawText.substring(1, rawText.length - 1).trim();
+      int startIndex = rawText.indexOf('{'); int endIndex = rawText.lastIndexOf('}');
+      if (startIndex != -1 && endIndex != -1) {
+        rawText = rawText.substring(startIndex, endIndex + 1);
+      } else {
+        throw FormatException('No JSON object found.');
+      }
+      
+      final parsedJson = jsonDecode(rawText);
+      double extractedAmount = 0.0;
+      if (parsedJson['amount'] != null) extractedAmount = double.tryParse(parsedJson['amount'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+
+      final newTransaction = AppTransaction(
+        bank: parsedJson['bank']?.toString() ?? 'Unknown',
+        bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Unknown',
+        amount: extractedAmount,
+        merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
+        type: parsedJson['type']?.toString() ?? 'Debit',
+        date: parsedJson['date']?.toString() ?? 'Unknown Date',
+        category: parsedJson['category']?.toString() ?? 'General',
+        accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
+        accountMask: parsedJson['account_mask']?.toString() ?? '',
+        availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
+      );
+      
+      widget.onTransactionExtracted(newTransaction);
+      setState(() => _extractedJsonSms = const JsonEncoder.withIndent('  ').convert(parsedJson));
+      
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('✅ SMS Transaction Extracted & Saved!'), backgroundColor: Colors.green));
+      Future.delayed(const Duration(seconds: 2), () { if (mounted) Navigator.pop(context); });
+    } catch (e) {
+      if (mounted) setState(() => _extractedJsonSms = 'Error extracting data:\n$e\n\n---\nRaw AI Response:\n$rawText');
+    } finally {
+      if (mounted) setState(() => _isLoadingSms = false);
+    }
+  }
+
+  Future<void> _processReceiptImage(ImageSource source) async {
+    final XFile? image = await _picker.pickImage(source: source);
+    if (image == null) return;
+
+    setState(() => _isScanningReceipt = true);
+
+    try {
+      final bytes = await image.readAsBytes();
+      
+      String rulesPrompt = widget.learningRules.isEmpty ? "" : 
+          "\nUser's learned category preferences (use strictly if matched): ${jsonEncode(widget.learningRules)}";
+
+      final systemInstruction = Content.system(
+        'You are a receipt data extraction bot. Analyze the image and extract the receipt information into a strict JSON object (NOT an array). '
+        '\n\nCRITICAL RULES:\n'
+        '1. The "category" field MUST be chosen exactly from this list, and no other words: '
+        '["Groceries", "Transport", "Dining", "Bills & Utilities", "Recurring Payments", "Shopping", "Transfers", "Income", "General"].\n'
+        '2. Keys must exactly match: "bank" (default to "Cash/Other" if not clear), "amount" (number), "merchant", "category", "type" (usually "Debit"), "date" (string DD-MMM), "account_type" (Unknown), "account_mask". $rulesPrompt'
+      );
+
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash', 
+        apiKey: _apiKey, 
+        systemInstruction: systemInstruction, 
+        generationConfig: GenerationConfig(responseMimeType: 'application/json', temperature: 0.1)
+      );
+
+      final prompt = TextPart("Extract the transaction details from this receipt.");
+      final imagePart = DataPart('image/jpeg', bytes);
+
+      final response = await model.generateContent([
+        Content.multi([prompt, imagePart])
+      ]);
+
+      if (!mounted) return;
+      String rawText = response.text ?? '{}';
+      
+      final String tripleTicks = String.fromCharCode(96) * 3;
+      rawText = rawText.replaceAll('$tripleTicks json', '').replaceAll(tripleTicks, '').trim();
+      if (rawText.startsWith('[')) rawText = rawText.substring(1, rawText.length - 1).trim();
+      int startIndex = rawText.indexOf('{'); int endIndex = rawText.lastIndexOf('}');
+      if (startIndex != -1 && endIndex != -1) {
+        rawText = rawText.substring(startIndex, endIndex + 1);
+      } else {
+        throw FormatException('No JSON object found.');
+      }
+      
+      final parsedJson = jsonDecode(rawText);
+      
+      double extractedAmount = 0.0;
+      if (parsedJson['amount'] != null) extractedAmount = double.tryParse(parsedJson['amount'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
+
+      final newTransaction = AppTransaction(
+        bank: parsedJson['bank']?.toString() ?? 'Cash/Other',
+        bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Cash/Other',
+        amount: extractedAmount,
+        merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
+        type: parsedJson['type']?.toString() ?? 'Debit',
+        date: parsedJson['date']?.toString() ?? 'Today',
+        category: parsedJson['category']?.toString() ?? 'General',
+        accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
+        accountMask: parsedJson['account_mask']?.toString() ?? '',
+        availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
+      );
+      
+      widget.onTransactionExtracted(newTransaction);
+      
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('✅ Receipt Extracted: LKR $extractedAmount at ${newTransaction.merchant}'), backgroundColor: Colors.green));
+      Future.delayed(const Duration(seconds: 2), () { if (mounted) Navigator.pop(context); });
+
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('❌ Error reading receipt: $e'), backgroundColor: Colors.red));
+    } finally {
+      if (mounted) setState(() => _isScanningReceipt = false);
+    }
+  }
+
+  void _submitManualForm() {
+    if (_formKey.currentState!.validate()) {
+      double amount = double.tryParse(_manualAmountController.text) ?? 0.0;
+      widget.onTransactionExtracted(AppTransaction(
+        bank: _selectedBank,
+        bankName: _selectedBank,
+        amount: amount,
+        merchant: _manualMerchantController.text,
+        type: _selectedType,
+        date: _manualDateController.text.isNotEmpty ? _manualDateController.text : 'Today',
+        category: _selectedCategory,
+        accountType: _selectedAccountType,
+        accountMask: _manualAccountMaskController.text,
+        availableBalance: null,
+      ));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📝 Manual transaction added!'), backgroundColor: Colors.green));
+      Navigator.pop(context); 
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Add Transaction'), backgroundColor: Theme.of(context).colorScheme.inversePrimary, bottom: const TabBar(tabs: [Tab(icon: Icon(Icons.sms), text: "Paste SMS"), Tab(icon: Icon(Icons.document_scanner), text: "Scan Receipt"), Tab(icon: Icon(Icons.edit_note), text: "Manual")])),
+        body: TabBarView(children: [_buildSmsTab(), _buildReceiptTab(), _buildManualTab()]),
+      ),
+    );
+  }
+
+  Widget _buildSmsTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text('Paste a Bank SMS below:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+          TextField(controller: _smsController, maxLines: 4, decoration: InputDecoration(hintText: 'e.g., $_sampleSms', border: const OutlineInputBorder(), filled: true)),
+          Align(alignment: Alignment.centerRight, child: TextButton(onPressed: () => _smsController.text = _sampleSms, child: const Text('Use Sample SMS'))),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(icon: _isLoadingSms ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.auto_awesome), label: Text(_isLoadingSms ? 'Extracting...' : 'Extract & Save with AI'), onPressed: _isLoadingSms ? null : _extractSmsData, style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16))),
+          const SizedBox(height: 24), const Text('AI Output:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(height: 8),
+          Expanded(child: Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.teal.withValues(alpha: 0.3))), child: SingleChildScrollView(child: Text(_extractedJsonSms.isEmpty ? 'Waiting for input...' : _extractedJsonSms, style: const TextStyle(fontFamily: 'monospace', color: Colors.greenAccent, fontSize: 14))))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReceiptTab() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.receipt_long, size: 100, color: Colors.teal), const SizedBox(height: 24), const Text('Smart Receipt Scanner', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 12),
+          const Text('Take a picture of your physical receipt. Gemini Vision AI will automatically extract the vendor, total amount, and categorize the expense.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)), const SizedBox(height: 40),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              ElevatedButton.icon(
+                icon: const Icon(Icons.camera_alt), 
+                label: const Text('Take Photo'), 
+                onPressed: _isScanningReceipt ? null : () => _processReceiptImage(ImageSource.camera), 
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16))
+              ),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.image), 
+                label: const Text('Upload'), 
+                onPressed: _isScanningReceipt ? null : () => _processReceiptImage(ImageSource.gallery), 
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16))
+              ),
+          ]),
+          const SizedBox(height: 30), if (_isScanningReceipt) const Column(children: [CircularProgressIndicator(), SizedBox(height: 16), Text('Gemini AI is reading receipt...', style: TextStyle(color: Colors.tealAccent))])
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Enter Details Manually', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), const SizedBox(height: 16),
+            TextFormField(controller: _manualAmountController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Amount (LKR)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.money)), validator: (value) => value == null || value.isEmpty ? 'Please enter an amount' : null), const SizedBox(height: 16),
+            TextFormField(controller: _manualMerchantController, decoration: const InputDecoration(labelText: 'Merchant / Vendor Name', border: OutlineInputBorder(), prefixIcon: Icon(Icons.store)), validator: (value) => value == null || value.isEmpty ? 'Please enter the merchant name' : null), const SizedBox(height: 16),
+            Row(children: [Expanded(child: DropdownButtonFormField<String>(initialValue: _selectedType, decoration: const InputDecoration(labelText: 'Type', border: OutlineInputBorder()), items: ['Debit', 'Credit'].map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(), onChanged: (val) => setState(() => _selectedType = val!))), const SizedBox(width: 16), Expanded(child: DropdownButtonFormField<String>(initialValue: _selectedBank, decoration: const InputDecoration(labelText: 'Bank', border: OutlineInputBorder()), items: _banks.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(), onChanged: (val) => setState(() => _selectedBank = val!)))]), const SizedBox(height: 16),
+            Row(children: [Expanded(child: DropdownButtonFormField<String>(initialValue: _selectedAccountType, decoration: const InputDecoration(labelText: 'Account Type', border: OutlineInputBorder()), items: _accountTypes.map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(), onChanged: (val) => setState(() => _selectedAccountType = val!))), const SizedBox(width: 16), Expanded(child: TextFormField(controller: _manualAccountMaskController, decoration: const InputDecoration(labelText: 'Last 4 Digits (Opt)', border: OutlineInputBorder())))]), const SizedBox(height: 16),
+            Row(children: [Expanded(flex: 2, child: DropdownButtonFormField<String>(initialValue: _selectedCategory, decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()), items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(), onChanged: (val) => setState(() => _selectedCategory = val!))), const SizedBox(width: 16), Expanded(flex: 2, child: TextFormField(controller: _manualDateController, decoration: const InputDecoration(labelText: 'Date (e.g. 28-May)', border: OutlineInputBorder(), prefixIcon: Icon(Icons.calendar_today))))]), const SizedBox(height: 32),
+            ElevatedButton(onPressed: _submitManualForm, style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16), backgroundColor: Colors.teal), child: const Text('Save Transaction', style: TextStyle(fontSize: 16, color: Colors.white))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+financial_tools_screen.dart
+File: lib/screens/financial_tools_screen.dart
+
+import 'package:flutter/material.dart';
+
+class FinancialToolsScreen extends StatelessWidget {
+  const FinancialToolsScreen({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Financial Tools'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: const [
+          ListTile(leading: Icon(Icons.calculate, color: Colors.tealAccent), title: Text('APIT / PAYE Tax Calculator'), subtitle: Text('Estimate your monthly corporate tax deductions.')), Divider(),
+          ListTile(leading: Icon(Icons.real_estate_agent, color: Colors.tealAccent), title: Text('Leasing Calculator'), subtitle: Text('Calculate monthly rentals for vehicles.')), Divider(),
+          ListTile(leading: Icon(Icons.account_balance, color: Colors.tealAccent), title: Text('Fixed Deposit Returns'), subtitle: Text('Compare local bank FD rates and returns.')),
+        ],
+      ),
+    );
+  }
+}
+
+history_screen.dart
+File: lib/screens/history_screen.dart
+
+import 'package:flutter/material.dart';
+import '../models/transaction.dart';
+import '../widgets/transaction_card.dart';
+
+class TransactionHistoryScreen extends StatelessWidget {
+  final List<AppTransaction> transactions;
+  final Function(AppTransaction, AppTransaction) onEdit;
+
+  const TransactionHistoryScreen({super.key, required this.transactions, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Transaction History'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      body: transactions.isEmpty
+          ? const Center(child: Text('No transactions recorded.', style: TextStyle(fontSize: 16, color: Colors.white54)))
+          : ListView.builder(
+              padding: const EdgeInsets.all(16.0),
+              itemCount: transactions.length,
+              itemBuilder: (context, index) => TransactionCard(transaction: transactions[index], onEdit: onEdit),
+            ),
+    );
+  }
+}
+
+home_screen.dart
+File: lib/screens/home_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../models/transaction.dart';
+import '../widgets/transaction_card.dart';
+import 'insights_screen.dart';
+import 'add_transaction_screen.dart';
+import 'history_screen.dart';
+
+class HomeScreen extends StatelessWidget {
+  final List<AppTransaction> transactions;
+  final Map<String, String> customCategories;
+  final VoidCallback onReset;
+  final Function(AppTransaction) onAddNewTransaction;
+  final Function(AppTransaction, AppTransaction) onEditTransaction;
+  final bool isListeningSms;
+
+  const HomeScreen({
+    super.key, 
+    required this.transactions, 
+    required this.onReset, 
+    required this.onAddNewTransaction, 
+    required this.onEditTransaction, 
+    required this.customCategories,
+    this.isListeningSms = false,
+  });
+
+  void _showBankBalancesDialog(BuildContext context, Map<String, double> balances, double total) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1F2833),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24))
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 5, 
+                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))
+                  )
+                ),
+                const SizedBox(height: 24),
+                const Text('Tracked Accounts', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 16),
+                if (balances.isEmpty)
+                  const Text('No transactions recorded yet.', style: TextStyle(color: Colors.white54)),
+                ...balances.entries.map((e) => _buildBankBalanceRow(e.key, e.value)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                  child: Divider(color: Colors.white24, thickness: 1),
+                ),
+                _buildBankBalanceRow('Total Net Tracked', total, isTotal: true),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBankBalanceRow(String bank, double amount, {bool isTotal = false}) {
+    bool isCreditCardOwed = bank.toLowerCase().contains('credit') && amount < 0;
+    final formattedAmount = NumberFormat('#,##0.00').format(amount);
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              bank, 
+              style: TextStyle(
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.w500, 
+                fontSize: isTotal ? 16 : 15,
+                color: isTotal ? Colors.white : Colors.white70
+              )
+            )
+          ),
+          Text(
+            'LKR $formattedAmount', 
+            style: TextStyle(
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600, 
+              fontSize: isTotal ? 16 : 15, 
+              color: isCreditCardOwed ? Colors.orangeAccent : (amount < 0 ? Colors.redAccent : (isTotal ? const Color(0xFF66FCF1) : Colors.white))
+            )
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 1. Calculate dynamic bank balances based ONLY on transactions
+    Map<String, double> dynamicBankBalances = {};
+    for (var t in transactions) {
+      if (!dynamicBankBalances.containsKey(t.bank)) {
+        dynamicBankBalances[t.bank] = 0.0;
+      }
+      if (t.type.toLowerCase() == 'credit') {
+        dynamicBankBalances[t.bank] = dynamicBankBalances[t.bank]! + t.amount;
+      } else {
+        dynamicBankBalances[t.bank] = dynamicBankBalances[t.bank]! - t.amount;
+      }
+    }
+
+    double totalBalance = dynamicBankBalances.values.fold(0.0, (sum, item) => sum + item);
+    double totalIncome = transactions.where((t) => t.type.toLowerCase() == 'credit').fold(0.0, (sum, item) => sum + item.amount);
+    double totalExpense = transactions.where((t) => t.type.toLowerCase() == 'debit').fold(0.0, (sum, item) => sum + item.amount);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const Text('Welcome, Kasun!'),
+            const SizedBox(width: 8),
+            if (isListeningSms) Tooltip(message: 'Auto-Sync Active', child: Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)))
+          ],
+        ),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () { onReset(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data cleared!'))); })],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => InsightsScreen(transactions: transactions))),
+        icon: const Icon(Icons.auto_graph, color: Color(0xFF0B0C10)),
+        label: const Text('Insights', style: TextStyle(color: Color(0xFF0B0C10), fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF66FCF1), elevation: 8,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => _showBankBalancesDialog(context, dynamicBankBalances, totalBalance),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF45A29E), Color(0xFF1F2833)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF66FCF1).withValues(alpha: 0.2),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const Text('TOTAL TRACKED BALANCE', style: TextStyle(fontSize: 12, color: Colors.white70, letterSpacing: 1.5, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        Text('LKR ${NumberFormat('#,##0.00').format(totalBalance)}', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white), textAlign: TextAlign.center),
+                        const SizedBox(height: 8),
+                        const Text('Tap to view tracked accounts & cards', style: TextStyle(fontSize: 12, color: Color(0xFF66FCF1)), textAlign: TextAlign.center),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildIncomeExpenseColumn('Income', 'LKR ${NumberFormat('#,##0').format(totalIncome)}', const Color(0xFF66FCF1)),
+                            Container(width: 1, height: 40, color: Colors.white24),
+                            _buildIncomeExpenseColumn('Expense', 'LKR ${NumberFormat('#,##0').format(totalExpense)}', Colors.redAccent),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildQuickAction(context, Icons.add_circle_outline, 'Add Entry', () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => AddTransactionScreen(onTransactionExtracted: onAddNewTransaction, learningRules: customCategories)));
+                  }),
+                  _buildQuickAction(context, Icons.list_alt, 'History', () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => TransactionHistoryScreen(transactions: transactions, onEdit: onEditTransaction)));
+                  }),
+                  _buildQuickAction(context, Icons.account_balance_wallet, 'Budgets', () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Coming soon!')))),
+                ],
+              ),
+              const SizedBox(height: 32),
+              const Text('Recent Transactions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              if (transactions.isEmpty)
+                const Padding(padding: EdgeInsets.all(16.0), child: Text('No transactions yet. Click Quick Actions -> Add Entry to get started!')),
+              ...transactions.take(5).map((t) => TransactionCard(transaction: t, onEdit: onEditTransaction)),
+              const SizedBox(height: 80),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIncomeExpenseColumn(String label, String amount, Color color) {
+    return Column(children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)), const SizedBox(height: 4), Text(amount, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color))]);
+  }
+
+  Widget _buildQuickAction(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+    return Column(
+      children: [
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 60, height: 60,
+            decoration: BoxDecoration(
+              color: const Color(0xFF1F2833),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white10),
+            ),
+            child: Icon(icon, color: const Color(0xFF66FCF1), size: 28),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+}
+
+insights_screen.dart
+File: lib/screens/insights_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../models/transaction.dart';
+
+class InsightsScreen extends StatefulWidget {
+  final List<AppTransaction> transactions;
+
+  const InsightsScreen({super.key, required this.transactions});
+
+  @override
+  State<InsightsScreen> createState() => _InsightsScreenState();
+}
+
+class _InsightsScreenState extends State<InsightsScreen> {
+  String _selectedFilter = 'Monthly';
+  final List<String> _filters = ['Weekly', 'Monthly'];
+  
+  // Changed to late so we can initialize it to the actual current month
+  late String _selectedMonth; 
+  final List<String> _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  late String _selectedWeek; 
+  List<String> _weeklyRanges = [];
+
+  // Consistent Category Colors for Stacked Chart and Donut
+  final Map<String, Color> _categoryColors = {
+    'Groceries': Colors.greenAccent,
+    'Transport': Colors.blueAccent,
+    'Dining': Colors.orangeAccent,
+    'Bills & Utilities': Colors.yellowAccent,
+    'Recurring Payments': Colors.tealAccent, // Replaced Subscriptions
+    'Shopping': Colors.pinkAccent,
+    'Transfers': Colors.purpleAccent,
+    'Income': Colors.lightGreenAccent,
+    'General': Colors.grey, // Replaced Other
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    // 1. Initialize the month first
+    _selectedMonth = DateFormat('MMM').format(DateTime.now());
+    
+    // 2. Generate the ranges and set the initial value for _selectedWeek
+    // We don't read _selectedWeek here, we just assign it.
+    _generateWeeklyRanges(_selectedMonth);
+  }
+
+  DateTime _parseDateStr(String dateStr) {
+    if (dateStr.toLowerCase() == 'today') return DateTime.now();
+    if (dateStr.toLowerCase() == 'yesterday') return DateTime.now().subtract(const Duration(days: 1));
+    try { return DateFormat('dd-MMM').parse(dateStr); } catch (e) {
+      try { return DateFormat('d-MMM').parse(dateStr); } catch (e2) { return DateTime.fromMillisecondsSinceEpoch(0); }
+    }
+  }
+
+  void _generateWeeklyRanges(String month) {
+    _weeklyRanges = [
+      '$month 04 - $month 10', 
+      '$month 11 - $month 17',
+      '$month 18 - $month 24', 
+      '$month 25 - $month 31',
+    ];
+    
+    // FIX: Assign directly without reading the previous value of _selectedWeek
+    _selectedWeek = _weeklyRanges[0];
+  }
+
+  bool _isSubscription(String merchant, String category) {
+    if (category == 'Recurring Payments') return true; // Updated here
+    final keywords = ['netflix', 'spotify', 'dialog', 'slt', 'mobitel', 'peo tv', 'pickme pass', 'daraz club', 'apple', 'google', 'zoom', 'canva'];
+    return keywords.any((k) => merchant.toLowerCase().contains(k));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // FIXED FILTERING LOGIC: We convert "Today" into its actual month dynamically
+    List<AppTransaction> filteredTx = widget.transactions.where((t) {
+      DateTime txDate = _parseDateStr(t.date);
+      String txMonth = DateFormat('MMM').format(txDate);
+      
+      if (_selectedFilter == 'Monthly' || _selectedFilter == 'Weekly') {
+        return txMonth == _selectedMonth;
+      }
+      return true;
+    }).toList();
+
+    // --- Analytics Processing ---
+    Map<String, Map<String, double>> dailyCategoryTotals = {};
+    Map<String, double> vendorTotals = {};
+    Map<String, double> categoryTotals = {};
+    // Subscriptions grouping
+    Map<String, AppTransaction> uniqueSubscriptions = {};
+    double grandTotalExpense = 0;
+
+    for (var t in filteredTx) {
+      if (t.type.toLowerCase() == 'debit') {
+        
+        // NORMALIZATION FIX: Convert "Today" to formatted date so bars group correctly
+        DateTime dateObj = _parseDateStr(t.date);
+        String normalizedDate = DateFormat('dd-MMM').format(dateObj);
+
+        // Daily Chart Data
+        if (!dailyCategoryTotals.containsKey(normalizedDate)) dailyCategoryTotals[normalizedDate] = {};
+        dailyCategoryTotals[normalizedDate]![t.category] = (dailyCategoryTotals[normalizedDate]![t.category] ?? 0) + t.amount;
+        
+        // Vendor/Category Data
+        vendorTotals[t.merchant] = (vendorTotals[t.merchant] ?? 0) + t.amount;
+        categoryTotals[t.category] = (categoryTotals[t.category] ?? 0) + t.amount;
+        grandTotalExpense += t.amount;
+
+        // Subs Data
+        if (_isSubscription(t.merchant, t.category)) {
+          if (!uniqueSubscriptions.containsKey(t.merchant) || uniqueSubscriptions[t.merchant]!.amount < t.amount) {
+            uniqueSubscriptions[t.merchant] = t;
+          }
+        }
+      }
+    }
+
+    var sortedVendors = vendorTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    String highestVendor = sortedVendors.isNotEmpty ? sortedVendors.first.key : 'None';
+
+    AppTransaction? highestSub;
+    AppTransaction? lowestSub;
+    if (uniqueSubscriptions.isNotEmpty) {
+      var sortedSubs = uniqueSubscriptions.values.toList()..sort((a, b) => b.amount.compareTo(a.amount));
+      highestSub = sortedSubs.first;
+      lowestSub = sortedSubs.last;
+    }
+
+    Map<String, double> categoryPercentages = {};
+    if (grandTotalExpense > 0) {
+      categoryTotals.forEach((k, v) => categoryPercentages[k] = v / grandTotalExpense);
+    }
+    var sortedCategoryPercentages = Map.fromEntries(categoryPercentages.entries.toList()..sort((a, b) => b.value.compareTo(a.value)));
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Spending Insights'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. TOP LEVEL FILTERS
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: _filters.map((filter) => Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ChoiceChip(
+                        label: Text(filter), selected: _selectedFilter == filter,
+                        onSelected: (selected) { if (selected) setState(() => _selectedFilter = filter); },
+                        selectedColor: Colors.teal.withValues(alpha: 0.4),
+                      ),
+                    )).toList(),
+                  ),
+                  if (_selectedFilter == 'Monthly')
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedMonth, icon: const Icon(Icons.calendar_month, color: Colors.tealAccent),
+                        items: _months.map((m) => DropdownMenuItem(value: m, child: Text(' $m '))).toList(),
+                        onChanged: (val) { setState(() { _selectedMonth = val!; _generateWeeklyRanges(val); }); },
+                      ),
+                    ),
+                ],
+              ),
+              if (_selectedFilter == 'Weekly')
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: _selectedWeek, icon: const Icon(Icons.date_range, color: Colors.tealAccent),
+                      items: _weeklyRanges.map((w) => DropdownMenuItem(value: w, child: Text(w, style: const TextStyle(fontWeight: FontWeight.bold)))).toList(),
+                      onChanged: (val) => setState(() => _selectedWeek = val!),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 16),
+
+              // 2. SPENDING PATTERNS (TOP LEVEL)
+              const Text('Spending Patterns', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              if (filteredTx.isEmpty) const Text('No data for selected period.', style: TextStyle(color: Colors.white54))
+              else ...[
+                _buildPatternInsightCard(icon: Icons.trending_up, iconColor: Colors.orangeAccent, title: 'Top Vendor: $highestVendor', subtitle: 'You spent the most here this period.'),
+                if (highestSub != null && lowestSub != null)
+                  Row(
+                    children: [
+                      Expanded(child: _buildSmallStatCard('Highest Sub', highestSub.merchant, 'LKR ${highestSub.amount.toStringAsFixed(0)}', Colors.redAccent)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildSmallStatCard('Lowest Sub', lowestSub.merchant, 'LKR ${lowestSub.amount.toStringAsFixed(0)}', Colors.greenAccent)),
+                    ],
+                  ),
+                // Smart Coaching Nudges
+                const SizedBox(height: 12),
+                ..._generateSmartCoaching(filteredTx).map((nudge) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: Colors.tealAccent.withOpacity(0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(children: [
+                      const Icon(Icons.lightbulb, color: Colors.tealAccent, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(nudge, style: const TextStyle(fontSize: 13, color: Colors.white))),
+                    ]),
+                  ),
+                )),
+              ],
+              const SizedBox(height: 24),
+
+              // 3. STACKED SCREEN TIME CHART
+              const Text('Daily Usage', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              _buildStackedBarChart(dailyCategoryTotals),
+              // Daily Reflections
+              if (dailyCategoryTotals.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                ..._generateReflections(dailyCategoryTotals.map((date, cats) => MapEntry(date, cats.values.fold(0, (sum, val) => sum + val)))).map((reflection) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  color: Colors.purpleAccent.withOpacity(0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(children: [
+                      const Icon(Icons.analytics, color: Colors.purpleAccent, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(reflection, style: const TextStyle(fontSize: 13, color: Colors.white))),
+                    ]),
+                  ),
+                )),
+              ],
+              const SizedBox(height: 32),
+
+              // 4. CATEGORY DONUT CHART
+              const Text('Category Breakdown', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 24),
+              if (sortedCategoryPercentages.isEmpty) const Text('Not enough data.', style: TextStyle(color: Colors.white54))
+              else Center(child: _buildDonutChart(sortedCategoryPercentages)),
+              const SizedBox(height: 32),
+
+              // 5. SUBSCRIPTIONS LIST
+              if (uniqueSubscriptions.isNotEmpty) ...[
+                const Text('Active Recurring Payments', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), // Changed title here
+                const SizedBox(height: 12),
+                Card(
+                  elevation: 2, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: ListView.separated(
+                    shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
+                    itemCount: uniqueSubscriptions.length, separatorBuilder: (c, i) => const Divider(height: 1, color: Colors.white10),
+                    itemBuilder: (c, i) {
+                      final sub = uniqueSubscriptions.values.elementAt(i);
+                      return ListTile(
+                        leading: const CircleAvatar(backgroundColor: Colors.black26, child: Icon(Icons.autorenew, color: Colors.blueAccent)),
+                        title: Text(sub.merchant, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Last paid: ${sub.date}', style: const TextStyle(fontSize: 12)),
+                        trailing: Text('LKR ${sub.amount.toStringAsFixed(0)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 60),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- STACKED BAR CHART (7-DAY WEEK VIEW) ---
+  Widget _buildStackedBarChart(Map<String, Map<String, double>> dailyData) {
+    if (dailyData.isEmpty) return const SizedBox(height: 150, child: Center(child: Text('No chart data')));
+
+    // 1. Group data strictly into a 7-day list (Mon -> Sun)
+    List<String> days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    // 2. Parse dates and determine the current week's Monday
+    var dates = dailyData.keys.toList();
+    dates.sort((a, b) => _parseDateStr(a).compareTo(_parseDateStr(b)));
+
+    DateTime? firstDate = dates.isNotEmpty ? _parseDateStr(dates.first) : null;
+    DateTime weekStart = firstDate ?? DateTime.now();
+    
+    // Calculate Monday of the week containing the first transaction
+    int daysToMonday = (weekStart.weekday - 1) % 7;
+    weekStart = weekStart.subtract(Duration(days: daysToMonday));
+
+    // 3. Build a 7-day map
+    Map<int, Map<String, double>> weekData = {};
+    for (int i = 0; i < 7; i++) {
+      weekData[i] = {};
+    }
+
+    // 4. Populate the week data
+    for (String date in dates) {
+      DateTime dateObj = _parseDateStr(date);
+      int daysFromMonday = (dateObj.difference(weekStart).inDays) % 7;
+      
+      if (daysFromMonday >= 0 && daysFromMonday < 7) {
+        Map<String, double> categoriesForDay = dailyData[date]!;
+        categoriesForDay.forEach((category, amount) {
+          weekData[daysFromMonday]![category] = (weekData[daysFromMonday]![category] ?? 0) + amount;
+        });
+      }
+    }
+
+    // 5. Find max weekly total for scaling
+    double maxWeeklyTotal = 0;
+    Set<String> usedCategories = {};
+    for (int i = 0; i < 7; i++) {
+      double dayTotal = weekData[i]!.values.fold(0, (a, b) => a + b);
+      if (dayTotal > maxWeeklyTotal) maxWeeklyTotal = dayTotal;
+      weekData[i]!.forEach((cat, _) => usedCategories.add(cat));
+    }
+    if (maxWeeklyTotal == 0) maxWeeklyTotal = 1;
+
+    return Container(
+      padding: const EdgeInsets.only(top: 16, bottom: 8),
+      decoration: BoxDecoration(color: const Color(0xFFF2F2F7).withValues(alpha: 0.05), borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        children: [
+          // Chart Area
+          SizedBox(
+            height: 200,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(7, (index) {
+                  double dailyTotal = weekData[index]!.values.fold(0, (a, b) => a + b);
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Tooltip(
+                        message: 'LKR ${dailyTotal.toStringAsFixed(0)}',
+                        preferBelow: false,
+                        verticalOffset: 10,
+                        child: _buildDayBar(dailyTotal, maxWeeklyTotal, weekData[index]!),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(days[index], style: const TextStyle(fontSize: 12, color: Colors.white70, fontWeight: FontWeight.w600)),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+          // Legend Area
+          if (usedCategories.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0, left: 16, right: 16),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: usedCategories.map((cat) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(width: 10, height: 10, decoration: BoxDecoration(color: _categoryColors[cat] ?? _categoryColors['General'], borderRadius: BorderRadius.circular(2))),
+                    const SizedBox(width: 4),
+                    Text(cat, style: const TextStyle(fontSize: 10, color: Colors.white70)),
+                  ],
+                )).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDayBar(double dailyTotal, double maxWeeklyTotal, Map<String, double> categories) {
+    const double trackHeight = 150.0;
+    double heightRatio = maxWeeklyTotal > 0 ? (dailyTotal / maxWeeklyTotal) : 0;
+    double fillHeight = trackHeight * heightRatio;
+
+    return Container(
+      height: trackHeight,
+      width: 32,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      alignment: Alignment.bottomCenter,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: fillHeight,
+          width: 32,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: categories.entries.map((cat) {
+              return Container(
+                height: fillHeight > 0 ? fillHeight * (cat.value / dailyTotal) : 0,
+                color: _categoryColors[cat.key],
+              );
+            }).toList(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDonutChart(Map<String, double> data) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 140, height: 140,
+          child: CustomPaint(
+            painter: DonutChartPainter(data, _categoryColors), 
+            child: const Center(child: Icon(Icons.pie_chart, color: Colors.white24, size: 40))
+          )
+        ),
+        const SizedBox(width: 32),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: data.entries.map((e) {
+            Color color = _categoryColors[e.key] ?? _categoryColors['General']!;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4.0),
+              child: Row(children: [
+                Container(width: 12, height: 12, decoration: BoxDecoration(shape: BoxShape.circle, color: color)), 
+                const SizedBox(width: 8), 
+                Text('${e.key} (${(e.value * 100).toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 12))
+              ]),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPatternInsightCard({required IconData icon, required Color iconColor, required String title, required String subtitle}) {
+    return Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: CircleAvatar(backgroundColor: iconColor.withValues(alpha: 0.2), child: Icon(icon, color: iconColor)), title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.white70))));
+  }
+
+  Widget _buildSmallStatCard(String title, String day, String amount, Color amountColor) {
+    return Card(elevation: 2, child: Padding(padding: const EdgeInsets.all(12.0), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 12, color: Colors.white70)), const SizedBox(height: 4), Text(day, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)), const SizedBox(height: 4), Text(amount, style: TextStyle(fontWeight: FontWeight.bold, color: amountColor, fontSize: 16))])));
+  }
+
+  List<String> _generateSmartCoaching(List<AppTransaction> txs) {
+    List<String> nudges = [];
+    DateTime now = DateTime.now();
+
+    // Salary Week Check
+    if (now.day >= 25 || now.day <= 5) {
+      nudges.add("It's salary week! Are we saving or spending?");
+    }
+    
+    // Credit Card Check
+    bool hasCreditCard = txs.any((t) => t.accountType == 'Credit Card');
+    if (hasCreditCard && now.day > 20) {
+      nudges.add("Don't postpone paying your credit card. Avoid extra charges by paying early.");
+    }
+
+    // Subscription Check
+    double subTotal = txs.where((t) => t.category == 'Recurring Payments').fold(0, (sum, t) => sum + t.amount);
+    if (subTotal > 0) {
+      nudges.add("Your subscription payments are coming up. You spent LKR ${subTotal.toStringAsFixed(0)} on them recently.");
+    }
+
+    if (nudges.isEmpty) nudges.add("Quick tip: Tracking daily helps you save 20% more monthly!");
+    return nudges;
+  }
+
+  List<String> _generateReflections(Map<String, double> dailyTotals) {
+    List<String> reflections = [];
+    
+    if (dailyTotals.isNotEmpty) {
+      var sortedDays = dailyTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      var highestDay = sortedDays.first;
+      var lowestDay = sortedDays.last;
+
+      reflections.add("Your expenses peaked on ${highestDay.key} at LKR ${highestDay.value.toStringAsFixed(0)}.");
+      if (lowestDay.value > 0) {
+        reflections.add("Great job on ${lowestDay.key}! You kept spending down to LKR ${lowestDay.value.toStringAsFixed(0)}.");
+      }
+    }
+    return reflections;
+  }
+}
+
+class DonutChartPainter extends CustomPainter {
+  final Map<String, double> data;
+  final Map<String, Color> colorMap;
+  DonutChartPainter(this.data, this.colorMap);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    const strokeWidth = 24.0;
+    double startAngle = -3.141592653589793 / 2; 
+    final paint = Paint()..style = PaintingStyle.stroke..strokeWidth = strokeWidth..strokeCap = StrokeCap.butt;
+    data.forEach((key, value) {
+      final sweepAngle = (value * 2 * 3.141592653589793);
+      paint.color = colorMap[key] ?? colorMap['General']!;
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius - (strokeWidth / 2)), startAngle, sweepAngle, false, paint);
+      startAngle += sweepAngle;
+    });
+  }
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+learning_screen.dart
+File: lib/screens/learning_screen.dart
+
+import 'package:flutter/material.dart';
+
+class LearningScreen extends StatelessWidget {
+  const LearningScreen({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Knowledge Hub'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildArticleCard('How to register for a TIN in Sri Lanka', 'Step-by-step visual guide for 2026.'),
+          _buildArticleCard('Central Bank Policy Rates Update', 'What the latest CBSL decisions mean for your loans.'),
+          _buildArticleCard('Understanding the EPF / ETF', 'How to check your balance and claim benefits.'),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildArticleCard(String title, String subtitle) => Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(leading: const Icon(Icons.article, color: Colors.teal), title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text(subtitle), trailing: const Icon(Icons.arrow_forward_ios, size: 16)));
+}
+
+main_navigation.dart
+File: lib/screens/main_navigation.dart
+
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:telephony/telephony.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // 1. Add this import
+
+// Import your existing models and utilities
+import '../models/transaction.dart';
+import '../utils/sms_validator.dart';
+
+// Import your screens
+import 'home_screen.dart';
+import 'financial_tools_screen.dart'; 
+import 'learning_screen.dart'; 
+import 'sallibot_screen.dart'; 
+
+class MainNavigation extends StatefulWidget {
+  const MainNavigation({super.key});
+
+  @override
+  State<MainNavigation> createState() => _MainNavigationState();
+}
+
+class _MainNavigationState extends State<MainNavigation> {
+  int _currentIndex = 0;
+  final Telephony telephony = Telephony.instance;
+  
+  // The global transaction list
+  List<AppTransaction> _transactions = []; 
+  
+  // NOTE: The hardcoded _bankBalances map has been removed!
+
+  // IMPORTANT: Replace with your actual API key securely before production
+  static const String _geminiApiKey = ''; 
+
+  @override
+  void initState() {
+    super.initState();
+    _initSmsListener();
+    _checkPendingSms();
+  }
+
+  void _initSmsListener() async {
+    bool? permissionsGranted = await telephony.requestPhoneAndSmsPermissions;
+    if (permissionsGranted != null && permissionsGranted) {
+      telephony.listenIncomingSms(
+        onNewMessage: (SmsMessage message) {
+          String sender = message.address ?? '';
+          String body = message.body ?? '';
+
+          if (SmsValidator.isBankTransaction(sender, body)) {
+            debugPrint("Valid bank SMS detected from $sender. Sending to Gemini...");
+            _extractTransactionWithGemini(body);
+          } else {
+            debugPrint("Ignored non-transactional or promotional SMS from $sender.");
+          }
+        },
+        listenInBackground: false,
+      );
+    }
+  }
+
+  Future<void> _checkPendingSms() async {
+    if (!Hive.isBoxOpen('pending_sms')) {
+      await Hive.openBox<String>('pending_sms');
+    }
+
+    var box = Hive.box<String>('pending_sms');
+
+    if (box.isEmpty) {
+      debugPrint('No pending background SMS.');
+      return;
+    }
+
+    debugPrint('Found ${box.length} pending SMS messages!');
+
+    for (int i = 0; i < box.length; i++) {
+      String? rawSms = box.getAt(i);
+
+      if (rawSms != null && rawSms.isNotEmpty) {
+        // TODO: Pass 'rawSms' to your Gemini Service here!
+        // Example: await _geminiService.extractSmsData(rawSms);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Processing background transaction...')),
+          );
+        }
+      }
+    }
+
+    await box.clear();
+  }
+
+  Future<void> _extractTransactionWithGemini(String smsBody) async {
+    try {
+      final model = GenerativeModel(
+        model: 'gemini-2.5-flash', // Updated to match your latest preference
+        apiKey: _geminiApiKey,
+        systemInstruction: Content.system(SmsValidator.geminiSystemInstruction),
+        generationConfig: GenerationConfig(
+          responseMimeType: 'application/json', 
+        ),
+      );
+
+      final prompt = 'Extract the transaction details from this SMS: "$smsBody"';
+      final response = await model.generateContent([Content.text(prompt)]);
+      final String rawJson = response.text ?? '{}';
+      final Map<String, dynamic> data = jsonDecode(rawJson);
+
+      if (data.containsKey('error')) {
+        debugPrint("Gemini Failsafe Triggered: ${data['error']} - SMS: $smsBody");
+        return; 
+      }
+
+      final newTransaction = AppTransaction(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        bank: data['bank']?.toString() ?? 'Unknown Bank',
+        bankName: data['bankName']?.toString() ?? data['bank']?.toString() ?? 'Unknown Bank',
+        amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
+        merchant: data['merchant']?.toString() ?? 'Unknown',
+        type: data['type']?.toString() ?? 'Debit',
+        date: "Today",
+        category: data['category']?.toString() ?? 'Other',
+        accountType: 'Account',
+        accountMask: data['accountMask']?.toString() ?? '',
+        availableBalance: data['availableBalance'] != null ? double.tryParse(data['availableBalance'].toString()) : null,
+      );
+
+      if (newTransaction.amount > 0) {
+        _handleNewTransaction(newTransaction);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Logged LKR ${newTransaction.amount} at ${newTransaction.merchant}'), backgroundColor: Colors.green),
+          );
+        }
+      }
+
+    } catch (e) {
+      debugPrint("Error extracting transaction: $e");
+    }
+  }
+
+  void _handleNewTransaction(AppTransaction transaction) {
+    setState(() {
+      _transactions.insert(0, transaction);
+    });
+  }
+
+  void _handleEditTransaction(AppTransaction oldTx, AppTransaction newTx) {
+    setState(() {
+      final index = _transactions.indexOf(oldTx);
+      if (index != -1) {
+        _transactions[index] = newTx;
+      }
+    });
+  }
+
+  void _handleReset() {
+    setState(() {
+      _transactions.clear();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          HomeScreen(
+            transactions: _transactions,
+            // We no longer pass bankBalances from here. The Home screen calculates it dynamically.
+            customCategories: const {},
+            onReset: _handleReset,
+            onAddNewTransaction: _handleNewTransaction,
+            onEditTransaction: _handleEditTransaction,
+            isListeningSms: true,
+          ),
+          const FinancialToolsScreen(),
+          const LearningScreen(),
+          const SalliBotScreen(),
+        ],
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF0B0C10),
+        selectedItemColor: const Color(0xFF66FCF1),
+        unselectedItemColor: Colors.white54,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.calculate), label: 'Tools'),
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Learn'),
+          BottomNavigationBarItem(icon: Icon(Icons.smart_toy), label: 'SalliBot'),
+        ],
+      ),
+    );
+  }
+}
+
+sallibot_screen.dart
+File: lib/screens/sallibot_screen.dart
+
+import 'package:flutter/material.dart';
+
+class SalliBotScreen extends StatelessWidget {
+  const SalliBotScreen({super.key});
+  
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('SalliBot AI'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.smart_toy, size: 100, color: Colors.teal), const SizedBox(height: 24), const Text('SalliBot is Offline', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 12),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 32.0), child: Text('Your localized conversational AI is coming soon!', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70))), const SizedBox(height: 32),
+            ElevatedButton(onPressed: () {}, child: const Text('Join Waitlist'))
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+number_format.dart
+File: lib/utils/number_format.dart
+
+import 'package:intl/intl.dart';
+
+/// Formats numbers with grouping separators and two decimal places.
+/// Example: `formatNumberWithCommas(1234567.89)` -> `1,234,567.89`
+String formatNumberWithCommas(num? value, {String? locale}) {
+  final fmt = NumberFormat('#,##0.00', locale ?? 'en_US');
+  if (value == null) return fmt.format(0);
+  return fmt.format(value);
+}
+
+sms_validator.dart
+File: lib/utils/sms_validator.dart
+
+class SmsValidator {
+  /// Layer 1: The Gateway Filter
+  /// Checks if the SMS is likely a bank transaction before hitting the Gemini API
+  static bool isBankTransaction(String? sender, String? body) {
+    if (sender == null || body == null) return false;
+
+    final lowerSender = sender.toLowerCase();
+    final lowerBody = body.toLowerCase();
+
+    // 1. Check if the sender is a known Sri Lankan bank
+    final allowedBankSenders = [
+      'commercial', 'combank', 'boc', 'sampath', 
+      'hnb', 'seylan', 'ntb', 'ndb', 'peoples'
+    ];
+    bool isBankSender = allowedBankSenders.any((bank) => lowerSender.contains(bank));
+
+    // 2. Check for transaction-specific keywords
+    final transactionKeywords = ['debited', 'credited', 'payment', 'transfer', 'lkr', 'rs'];
+    bool hasTransactionKeyword = transactionKeywords.any((keyword) => lowerBody.contains(keyword));
+
+    // 3. Filter out promotional messages to save Gemini quota
+    final promoKeywords = ['offer', 'promo', 'discount', '% off', 'sale'];
+    bool hasPromoKeyword = promoKeywords.any((keyword) => lowerBody.contains(keyword));
+
+    return isBankSender && hasTransactionKeyword && !hasPromoKeyword;
+  }
+
+  /// Layer 2: The Gemini Failsafe Instruction
+  /// This strict system instruction guarantees we get standard JSON and filters out false positives.
+  static const String geminiSystemInstruction = '''
+  You are an extraction tool for Sri Lankan bank transaction SMS alerts.
+  Extract the following details and return ONLY a valid JSON object.
+  
+  CRITICAL RULES:
+  1. The "category" field MUST be chosen exactly from this list:
+     ["Groceries", "Transport", "Dining", "Bills & Utilities", "Recurring Payments", "Shopping", "Transfers", "Income", "General"].
+  2. "bankName": Extract the name of the bank (e.g., "Commercial Bank", "BOC", "Sampath Bank").
+  3. "availableBalance": Extract the remaining account balance if mentioned in the SMS (return as a numeric value). If not mentioned, return null.
+  
+  The keys must exactly match: 
+  - "amount" (numeric)
+  - "merchant" (string)
+  - "category" (from the list above)
+  - "type" ("debit" or "credit")
+  - "bankName" (string)
+  - "availableBalance" (numeric or null)
+  
+  CRITICAL FAILSAFE: If the message is NOT a bank transaction,
+  return EXACTLY this JSON: {"error": "Not a valid transaction SMS"}
+  ''';
+}
+
+transaction_card.dart
+File: lib/widgets/transaction_card.dart
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../models/transaction.dart';
+
+class TransactionCard extends StatelessWidget {
+  final AppTransaction transaction;
+  final Function(AppTransaction, AppTransaction) onEdit;
+
+  const TransactionCard({super.key, required this.transaction, required this.onEdit});
+
+  void _showTransactionDetails(BuildContext context) {
+    bool isDebit = transaction.type.toLowerCase() == 'debit';
+    String maskText = transaction.accountMask.isNotEmpty ? '**${transaction.accountMask}' : 'N/A';
+    
+    showModalBottomSheet(
+      context: context, isScrollControlled: true,
+      backgroundColor: const Color(0xFF1F2833),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
+              const SizedBox(height: 24),
+              Center(child: Text(transaction.merchant, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
+              const SizedBox(height: 8),
+              Center(child: Text('${isDebit ? '-' : '+'} LKR ${NumberFormat('#,##0.00').format(transaction.amount)}', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: isDebit ? Colors.white : const Color(0xFF66FCF1)))),
+              const SizedBox(height: 24),
+              const Divider(color: Colors.white10),
+              const SizedBox(height: 16),
+              _buildDetailRow('Date', transaction.date),
+              _buildDetailRow('Category', transaction.category),
+              _buildDetailRow('Bank', transaction.bank),
+              _buildDetailRow('Account Type', transaction.accountType),
+              if (transaction.accountMask.isNotEmpty) _buildDetailRow('Card/Account Number', maskText),
+              _buildDetailRow('Transaction Type', transaction.type),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.edit, color: Color(0xFF0B0C10)),
+                  label: const Text('Edit Transaction', style: TextStyle(color: Color(0xFF0B0C10), fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF66FCF1), padding: const EdgeInsets.all(16)),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _openEditDialog(context);
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  void _openEditDialog(BuildContext context) {
+    final amtCtrl = TextEditingController(text: transaction.amount.toString());
+    final merCtrl = TextEditingController(text: transaction.merchant);
+    // Ensure these exactly match what we will tell the Gemini API to use!
+    final catList = [
+      'Groceries', 'Transport', 'Dining', 'Bills & Utilities', 
+      'Recurring Payments', 'Shopping', 'Transfers', 'Income', 'General'
+    ];
+    String selCat = catList.contains(transaction.category) ? transaction.category : 'Other';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Transaction'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: amtCtrl, decoration: const InputDecoration(labelText: 'Amount (LKR)'), keyboardType: TextInputType.number),
+                const SizedBox(height: 12),
+                TextField(controller: merCtrl, decoration: const InputDecoration(labelText: 'Merchant')),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: selCat,
+                  decoration: const InputDecoration(labelText: 'Category'),
+                  items: catList.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (val) => selCat = val!,
+                )
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                double newAmt = double.tryParse(amtCtrl.text) ?? transaction.amount;
+                AppTransaction updated = AppTransaction(
+                  id: transaction.id,
+                  bank: transaction.bank,
+                  bankName: transaction.bankName,
+                  amount: newAmt,
+                  merchant: merCtrl.text,
+                  type: transaction.type,
+                  date: transaction.date,
+                  category: selCat,
+                  accountType: transaction.accountType,
+                  accountMask: transaction.accountMask,
+                  availableBalance: transaction.availableBalance,
+                );
+                onEdit(transaction, updated);
+                Navigator.pop(context);
+              },
+              child: const Text('Save Changes'),
+            )
+          ],
+        );
+      }
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(label, style: const TextStyle(color: Colors.white54, fontSize: 16)), Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))]),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    IconData categoryIcon = Icons.receipt_long;
+    
+    // Map the new strict AI categories to Material Icons
+    switch (transaction.category) {
+      case 'Groceries': categoryIcon = Icons.shopping_cart; break;
+      case 'Transport': categoryIcon = Icons.local_taxi; break;
+      case 'Dining': categoryIcon = Icons.fastfood; break;
+      case 'Bills & Utilities': categoryIcon = Icons.bolt; break;
+      case 'Recurring Payments': categoryIcon = Icons.autorenew; break; // Replaced Subscriptions
+      case 'Shopping': categoryIcon = Icons.shopping_bag; break;
+      case 'Transfers': categoryIcon = Icons.swap_horiz; break;
+      case 'Income': categoryIcon = Icons.account_balance_wallet; break;
+      case 'General': default: categoryIcon = Icons.category; break;
+    }
+
+    String accString = transaction.accountMask.isNotEmpty ? ' (**${transaction.accountMask})' : '';
+
+    // ... rest of your build method remains exactly the same!
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: InkWell(
+        onTap: () => _showTransactionDetails(context),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1F2833),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48, height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF66FCF1).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(categoryIcon, color: const Color(0xFF66FCF1), size: 24),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(transaction.merchant, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text('${transaction.date} • ${transaction.bank}$accString', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                  ],
+                ),
+              ),
+              Text(
+                '${transaction.type.toLowerCase() == 'debit' ? '-' : '+'} LKR ${NumberFormat('#,##0').format(transaction.amount)}',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: transaction.type.toLowerCase() == 'debit' ? Colors.white : const Color(0xFF66FCF1)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+main.dart
+File: lib/main.dart
+
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:telephony/telephony.dart';
+import 'screens/main_navigation.dart';
+import 'utils/sms_validator.dart';
+import 'package:hive_flutter/hive_flutter.dart'; // 1. Add this import
+
+// 2. Update the background handler
+@pragma('vm:entry-point')
+backgroundMessageHandler(SmsMessage message) async {
+  debugPrint("Background SMS received from: ${message.address}");
+
+  if (SmsValidator.isBankTransaction(message.address, message.body)) {
+    debugPrint("Valid Bank SMS caught in background. Saving to Hive...");
+    
+    // Initialize Hive for this specific background memory space
+    await Hive.initFlutter(); 
+    
+    // Open the box and save the raw SMS text
+    var box = await Hive.openBox<String>('pending_sms');
+    await box.add(message.body ?? ''); 
+    
+    debugPrint("Saved successfully!");
+  }
+}
+
+void main() async { // 3. Make main async
+  WidgetsFlutterBinding.ensureInitialized(); 
+  
+  // 4. Initialize Hive for the main app
+  await Hive.initFlutter();
+  
+  // 5. Open the box so the app can read it right away when it starts
+  await Hive.openBox<String>('pending_sms'); 
+
+  runApp(const SalliMateApp());
+}
+
+class SalliMateApp extends StatelessWidget {
+  const SalliMateApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'SalliMate Prototype',
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF0B0C10),
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFF66FCF1),
+          secondary: Color(0xFF45A29E),
+          surface: Color(0xFF1F2833),
+        ),
+        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme).apply(
+          bodyColor: const Color(0xFFC5C6C7),
+          displayColor: Colors.white,
+        ),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF1F2833),
+          elevation: 8,
+          shadowColor: Colors.black54,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+      ),
+      home: const MainNavigation(),
+    );
+  }
+}

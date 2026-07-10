@@ -113,19 +113,20 @@ class _MainNavigationState extends State<MainNavigation> {
         return; 
       }
 
-      final newTransaction = AppTransaction(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        bank: data['bank']?.toString() ?? 'Unknown Bank',
-        bankName: data['bankName']?.toString() ?? data['bank']?.toString() ?? 'Unknown Bank',
-        amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
-        merchant: data['merchant']?.toString() ?? 'Unknown',
-        type: data['type']?.toString() ?? 'Debit',
-        date: "Today",
-        category: data['category']?.toString() ?? 'Other',
-        accountType: 'Account',
-        accountMask: data['accountMask']?.toString() ?? '',
-        availableBalance: data['availableBalance'] != null ? double.tryParse(data['availableBalance'].toString()) : null,
-      );
+      final newTransaction = AppTransaction.create(
+  bank: data['bank']?.toString() ?? 'Unknown Bank',
+  bankName: data['bankName']?.toString() ?? data['bank']?.toString() ?? 'Unknown Bank',
+  amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
+  merchant: data['merchant']?.toString() ?? 'Unknown',
+  type: data['type']?.toString() ?? 'Debit',
+  date: "Today",
+  category: data['category']?.toString() ?? 'General',
+  accountType: 'Account',
+  accountMask: data['accountMask']?.toString() ?? '',
+  availableBalance: data['availableBalance'] != null ? double.tryParse(data['availableBalance'].toString()) : null,
+  source: 'sms',
+  smsRawText: smsBody,
+);
 
       if (newTransaction.amount > 0) {
         _handleNewTransaction(newTransaction);

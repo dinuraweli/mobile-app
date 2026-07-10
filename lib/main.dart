@@ -1,11 +1,12 @@
+// File: lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:telephony/telephony.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/main_navigation.dart';
 import 'utils/sms_validator.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // 1. Add this import
+import 'services/database_service.dart';
 
-// 2. Update the background handler
 @pragma('vm:entry-point')
 backgroundMessageHandler(SmsMessage message) async {
   debugPrint("Background SMS received from: ${message.address}");
@@ -13,26 +14,24 @@ backgroundMessageHandler(SmsMessage message) async {
   if (SmsValidator.isBankTransaction(message.address, message.body)) {
     debugPrint("Valid Bank SMS caught in background. Saving to Hive...");
     
-    // Initialize Hive for this specific background memory space
-    await Hive.initFlutter(); 
-    
-    // Open the box and save the raw SMS text
+    await Hive.initFlutter();
     var box = await Hive.openBox<String>('pending_sms');
-    await box.add(message.body ?? ''); 
+    await box.add(message.body ?? '');
     
     debugPrint("Saved successfully!");
   }
 }
 
-void main() async { // 3. Make main async
-  WidgetsFlutterBinding.ensureInitialized(); 
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   
-  // 4. Initialize Hive for the main app
+  // Initialize Hive for background SMS
   await Hive.initFlutter();
+  await Hive.openBox<String>('pending_sms');
   
-  // 5. Open the box so the app can read it right away when it starts
-  await Hive.openBox<String>('pending_sms'); 
-
+  // Initialize Isar Database
+  await DatabaseService().initialize();
+  
   runApp(const SalliMateApp());
 }
 
@@ -42,7 +41,8 @@ class SalliMateApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SalliMate Prototype',
+      title: 'SalliMate',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,

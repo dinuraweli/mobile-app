@@ -84,18 +84,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       double extractedAmount = 0.0;
       if (parsedJson['amount'] != null) extractedAmount = double.tryParse(parsedJson['amount'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
 
-      final newTransaction = AppTransaction(
-        bank: parsedJson['bank']?.toString() ?? 'Unknown',
-        bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Unknown',
-        amount: extractedAmount,
-        merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
-        type: parsedJson['type']?.toString() ?? 'Debit',
-        date: parsedJson['date']?.toString() ?? 'Unknown Date',
-        category: parsedJson['category']?.toString() ?? 'General',
-        accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
-        accountMask: parsedJson['account_mask']?.toString() ?? '',
-        availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
-      );
+      final newTransaction = AppTransaction.create(
+  bank: parsedJson['bank']?.toString() ?? 'Unknown',
+  bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Unknown',
+  amount: extractedAmount,
+  merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
+  type: parsedJson['type']?.toString() ?? 'Debit',
+  date: parsedJson['date']?.toString() ?? 'Unknown Date',
+  category: parsedJson['category']?.toString() ?? 'General',
+  accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
+  accountMask: parsedJson['account_mask']?.toString() ?? '',
+  availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
+  source: 'sms',
+  smsRawText: _smsController.text,
+);
       
       widget.onTransactionExtracted(newTransaction);
       setState(() => _extractedJsonSms = const JsonEncoder.withIndent('  ').convert(parsedJson));
@@ -161,18 +163,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       double extractedAmount = 0.0;
       if (parsedJson['amount'] != null) extractedAmount = double.tryParse(parsedJson['amount'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0.0;
 
-      final newTransaction = AppTransaction(
-        bank: parsedJson['bank']?.toString() ?? 'Cash/Other',
-        bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Cash/Other',
-        amount: extractedAmount,
-        merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
-        type: parsedJson['type']?.toString() ?? 'Debit',
-        date: parsedJson['date']?.toString() ?? 'Today',
-        category: parsedJson['category']?.toString() ?? 'General',
-        accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
-        accountMask: parsedJson['account_mask']?.toString() ?? '',
-        availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
-      );
+      final newTransaction = AppTransaction.create(
+  bank: parsedJson['bank']?.toString() ?? 'Cash/Other',
+  bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Cash/Other',
+  amount: extractedAmount,
+  merchant: parsedJson['merchant']?.toString() ?? 'Unknown',
+  type: parsedJson['type']?.toString() ?? 'Debit',
+  date: parsedJson['date']?.toString() ?? 'Today',
+  category: parsedJson['category']?.toString() ?? 'General',
+  accountType: parsedJson['account_type']?.toString() ?? 'Unknown',
+  accountMask: parsedJson['account_mask']?.toString() ?? '',
+  availableBalance: parsedJson['availableBalance'] != null ? double.tryParse(parsedJson['availableBalance'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) : null,
+  source: 'receipt',
+);
       
       widget.onTransactionExtracted(newTransaction);
       
@@ -189,18 +192,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void _submitManualForm() {
     if (_formKey.currentState!.validate()) {
       double amount = double.tryParse(_manualAmountController.text) ?? 0.0;
-      widget.onTransactionExtracted(AppTransaction(
-        bank: _selectedBank,
-        bankName: _selectedBank,
-        amount: amount,
-        merchant: _manualMerchantController.text,
-        type: _selectedType,
-        date: _manualDateController.text.isNotEmpty ? _manualDateController.text : 'Today',
-        category: _selectedCategory,
-        accountType: _selectedAccountType,
-        accountMask: _manualAccountMaskController.text,
-        availableBalance: null,
-      ));
+      widget.onTransactionExtracted(AppTransaction.create(
+  bank: _selectedBank,
+  bankName: _selectedBank,
+  amount: amount,
+  merchant: _manualMerchantController.text,
+  type: _selectedType,
+  date: _manualDateController.text.isNotEmpty ? _manualDateController.text : 'Today',
+  category: _selectedCategory,
+  accountType: _selectedAccountType,
+  accountMask: _manualAccountMaskController.text,
+  availableBalance: null,
+  source: 'manual',
+));
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('📝 Manual transaction added!'), backgroundColor: Colors.green));
       Navigator.pop(context); 
     }

@@ -1,18 +1,44 @@
-class AppTransaction {
-  final String id;
-  final String bank;
-  final String bankName;
-  final double amount;
-  final String merchant;
-  final String type;
-  final String date;
-  final String category;
-  final String accountType;
-  final String accountMask;
-  final double? availableBalance;
+// File: lib/models/transaction.dart
+import 'package:isar/isar.dart';
 
+part 'transaction.g.dart';
+
+@collection
+class AppTransaction {
+  Id id = Isar.autoIncrement;
+
+  @Index(unique: true, replace: true)
+  late String transactionId;
+
+  late String bank;
+  late String bankName;
+  late double amount;
+  late String merchant;
+  late String type;
+  late String date;
+  late String category;
+  late String accountType;
+  late String accountMask;
+  double? availableBalance;
+
+  @Index()
+  late DateTime createdAt;
+
+  late String source;
+  String? smsRawText;
+  bool isSynced = false;
+  double? aiConfidence;
+
+  @ignore
+  bool get isDebit => type.toLowerCase() == 'debit';
+
+  @ignore
+  bool get isCredit => type.toLowerCase() == 'credit';
+
+  // Main constructor
   AppTransaction({
-    String? id,
+    this.id = Isar.autoIncrement,
+    required this.transactionId,
     required this.bank,
     this.bankName = '',
     required this.amount,
@@ -23,10 +49,50 @@ class AppTransaction {
     this.accountType = 'Unknown',
     this.accountMask = '',
     this.availableBalance,
-  }) : id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    required this.createdAt,
+    this.source = 'manual',
+    this.smsRawText,
+    this.isSynced = false,
+    this.aiConfidence,
+  });
+
+  // Convenience factory - use this everywhere in your app!
+  factory AppTransaction.create({
+    required String bank,
+    String bankName = '',
+    required double amount,
+    required String merchant,
+    required String type,
+    String date = 'Today',
+    required String category,
+    String accountType = 'Unknown',
+    String accountMask = '',
+    double? availableBalance,
+    String source = 'manual',
+    String? smsRawText,
+    double? aiConfidence,
+  }) {
+    return AppTransaction(
+      transactionId: DateTime.now().millisecondsSinceEpoch.toString(),
+      bank: bank,
+      bankName: bankName.isEmpty ? bank : bankName,
+      amount: amount,
+      merchant: merchant,
+      type: type,
+      date: date,
+      category: category,
+      accountType: accountType,
+      accountMask: accountMask,
+      availableBalance: availableBalance,
+      createdAt: DateTime.now(),
+      source: source,
+      smsRawText: smsRawText,
+      aiConfidence: aiConfidence,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
+        'id': transactionId,
         'bank': bank,
         'bankName': bankName,
         'amount': amount,
@@ -37,19 +103,22 @@ class AppTransaction {
         'accountType': accountType,
         'accountMask': accountMask,
         'availableBalance': availableBalance,
+        'source': source,
       };
 
-  factory AppTransaction.fromJson(Map<String, dynamic> json) => AppTransaction(
-        id: json['id'],
-        bank: json['bank'],
-        bankName: json['bankName'] ?? '',
-        amount: json['amount'],
-        merchant: json['merchant'],
-        type: json['type'],
-        date: json['date'],
-        category: json['category'],
-        accountType: json['accountType'] ?? 'Unknown',
-        accountMask: json['accountMask'] ?? '',
-        availableBalance: json['availableBalance'] != null ? double.tryParse(json['availableBalance'].toString()) : null,
+  factory AppTransaction.fromJson(Map<String, dynamic> json) => AppTransaction.create(
+        bank: json['bank']?.toString() ?? 'Unknown',
+        bankName: json['bankName']?.toString() ?? '',
+        amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+        merchant: json['merchant']?.toString() ?? 'Unknown',
+        type: json['type']?.toString() ?? 'debit',
+        date: json['date']?.toString() ?? 'Today',
+        category: json['category']?.toString() ?? 'General',
+        accountType: json['accountType']?.toString() ?? 'Unknown',
+        accountMask: json['accountMask']?.toString() ?? '',
+        availableBalance: json['availableBalance'] != null
+            ? double.tryParse(json['availableBalance'].toString())
+            : null,
+        source: json['source']?.toString() ?? 'manual',
       );
 }

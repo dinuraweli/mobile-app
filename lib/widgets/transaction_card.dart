@@ -176,7 +176,7 @@ class TransactionCard extends StatelessWidget {
                   children: [
                     Text(transaction.merchant, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 4),
-                    Text('${transaction.date} • ${transaction.bank}$accString', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                    Text('${transaction.date} • ${transaction.bankDisplay}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
                   ],
                 ),
               ),

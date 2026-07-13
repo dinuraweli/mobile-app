@@ -135,7 +135,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
     var sortedCategoryPercentages = Map.fromEntries(categoryPercentages.entries.toList()..sort((a, b) => b.value.compareTo(a.value)));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Spending Insights'), backgroundColor: Theme.of(context).colorScheme.inversePrimary),
+      appBar: AppBar(title: const Text('Spending Insights'), backgroundColor: Theme.of(context).colorScheme.inversePrimary, automaticallyImplyLeading: false),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -260,7 +260,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                     },
                   ),
                 ),
-                const SizedBox(height: 60),
+                const SizedBox(height: 100),
               ],
             ],
           ),

@@ -7,11 +7,13 @@ import '../models/transaction.dart';
 import '../services/database_service.dart';
 import '../utils/sms_validator.dart';
 import '../services/transaction_parser.dart';
+import '../widgets/floating_nav_bar.dart';
 
 import 'home_screen.dart';
 import 'financial_tools_screen.dart';
 import 'learning_screen.dart';
 import 'sallibot_screen.dart';
+import 'insights_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -187,6 +189,8 @@ class _MainNavigationState extends State<MainNavigation> {
     }
 
     return Scaffold(
+      extendBody: true,
+      backgroundColor: const Color(0xFF0B0C10),
       body: IndexedStack(
         index: _currentIndex,
         children: [
@@ -198,28 +202,19 @@ class _MainNavigationState extends State<MainNavigation> {
             onEditTransaction: _handleEditTransaction,
             isListeningSms: true,
           ),
+          InsightsScreen(transactions: _transactions),
           const FinancialToolsScreen(),
           const LearningScreen(),
           const SalliBotScreen(),
         ],
       ),
-      bottomNavigationBar: BottomNavigationBar(
+      bottomNavigationBar: FloatingNavBar(
         currentIndex: _currentIndex,
         onTap: (index) {
           setState(() {
             _currentIndex = index;
           });
         },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: const Color(0xFF0B0C10),
-        selectedItemColor: const Color(0xFF66FCF1),
-        unselectedItemColor: Colors.white54,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.calculate), label: 'Tools'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Learn'),
-          BottomNavigationBarItem(icon: Icon(Icons.smart_toy), label: 'SalliBot'),
-        ],
       ),
     );
   }

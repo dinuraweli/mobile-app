@@ -35,6 +35,37 @@ class AppTransaction {
   @ignore
   bool get isCredit => type.toLowerCase() == 'credit';
 
+  @ignore
+  String get bankDisplay {
+    // Clean bank name
+    String cleanBank = bank
+        .replaceAll('Bank', '')
+        .replaceAll('bank', '')
+        .trim();
+
+    // Format account mask
+    if (accountMask.isNotEmpty) {
+      return '$cleanBank $accountMask';
+    }
+    return cleanBank;
+  }
+
+  @ignore
+  String get bankShortName {
+    // Map long bank names to short codes
+    final lower = bank.toLowerCase();
+    if (lower.contains('commercial') || lower.contains('combank')) return 'ComBank';
+    if (lower.contains('sampath')) return 'Sampath';
+    if (lower.contains('hnb')) return 'HNB';
+    if (lower.contains('boc')) return 'BOC';
+    if (lower.contains('ndb')) return 'NDB';
+    if (lower.contains('seylan')) return 'Seylan';
+    if (lower.contains('ntb')) return 'NTB';
+    if (lower.contains('hsbc')) return 'HSBC';
+    if (lower.contains('cash') || lower.contains('other')) return 'Cash';
+    return bank.length > 10 ? '${bank.substring(0, 10)}...' : bank;
+  }
+
   // Main constructor
   AppTransaction({
     this.id = Isar.autoIncrement,

@@ -17,7 +17,14 @@ class TransactionHistoryScreen extends StatelessWidget {
           : ListView.builder(
               padding: const EdgeInsets.all(16.0),
               itemCount: transactions.length,
-              itemBuilder: (context, index) => TransactionCard(transaction: transactions[index], onEdit: onEdit),
+              itemBuilder: (context, index) {
+                return Column(
+                  children: [
+                    TransactionCard(transaction: transactions[index], onEdit: onEdit),
+                    if (index == transactions.length - 1) const SizedBox(height: 100),
+                  ],
+                );
+              },
             ),
     );
   }

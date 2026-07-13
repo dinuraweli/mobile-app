@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/transaction.dart';
+import '../widgets/balance_summary_card.dart';
 import '../widgets/transaction_card.dart';
 import 'insights_screen.dart';
 import 'add_transaction_screen.dart';
@@ -24,98 +24,8 @@ class HomeScreen extends StatelessWidget {
     this.isListeningSms = false,
   });
 
-  void _showBankBalancesDialog(BuildContext context, Map<String, double> balances, double total) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1F2833),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24))
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 5, 
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))
-                  )
-                ),
-                const SizedBox(height: 24),
-                const Text('Tracked Accounts', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                const SizedBox(height: 16),
-                if (balances.isEmpty)
-                  const Text('No transactions recorded yet.', style: TextStyle(color: Colors.white54)),
-                ...balances.entries.map((e) => _buildBankBalanceRow(e.key, e.value)),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 8.0),
-                  child: Divider(color: Colors.white24, thickness: 1),
-                ),
-                _buildBankBalanceRow('Total Net Tracked', total, isTotal: true),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBankBalanceRow(String bank, double amount, {bool isTotal = false}) {
-    bool isCreditCardOwed = bank.toLowerCase().contains('credit') && amount < 0;
-    final formattedAmount = NumberFormat('#,##0.00').format(amount);
-    
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Text(
-              bank, 
-              style: TextStyle(
-                fontWeight: isTotal ? FontWeight.bold : FontWeight.w500, 
-                fontSize: isTotal ? 16 : 15,
-                color: isTotal ? Colors.white : Colors.white70
-              )
-            )
-          ),
-          Text(
-            'LKR $formattedAmount', 
-            style: TextStyle(
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.w600, 
-              fontSize: isTotal ? 16 : 15, 
-              color: isCreditCardOwed ? Colors.orangeAccent : (amount < 0 ? Colors.redAccent : (isTotal ? const Color(0xFF66FCF1) : Colors.white))
-            )
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // 1. Calculate dynamic bank balances based ONLY on transactions
-    Map<String, double> dynamicBankBalances = {};
-    for (var t in transactions) {
-      if (!dynamicBankBalances.containsKey(t.bank)) {
-        dynamicBankBalances[t.bank] = 0.0;
-      }
-      if (t.type.toLowerCase() == 'credit') {
-        dynamicBankBalances[t.bank] = dynamicBankBalances[t.bank]! + t.amount;
-      } else {
-        dynamicBankBalances[t.bank] = dynamicBankBalances[t.bank]! - t.amount;
-      }
-    }
-
-    double totalBalance = dynamicBankBalances.values.fold(0.0, (sum, item) => sum + item);
-    double totalIncome = transactions.where((t) => t.type.toLowerCase() == 'credit').fold(0.0, (sum, item) => sum + item.amount);
-    double totalExpense = transactions.where((t) => t.type.toLowerCase() == 'debit').fold(0.0, (sum, item) => sum + item.amount);
-
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -128,60 +38,13 @@ class HomeScreen extends StatelessWidget {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () { onReset(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data cleared!'))); })],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => InsightsScreen(transactions: transactions))),
-        icon: const Icon(Icons.auto_graph, color: Color(0xFF0B0C10)),
-        label: const Text('Insights', style: TextStyle(color: Color(0xFF0B0C10), fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF66FCF1), elevation: 8,
-      ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              GestureDetector(
-                onTap: () => _showBankBalancesDialog(context, dynamicBankBalances, totalBalance),
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF45A29E), Color(0xFF1F2833)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF66FCF1).withValues(alpha: 0.2),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text('TOTAL TRACKED BALANCE', style: TextStyle(fontSize: 12, color: Colors.white70, letterSpacing: 1.5, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
-                        const SizedBox(height: 8),
-                        Text('LKR ${NumberFormat('#,##0.00').format(totalBalance)}', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: Colors.white), textAlign: TextAlign.center),
-                        const SizedBox(height: 8),
-                        const Text('Tap to view tracked accounts & cards', style: TextStyle(fontSize: 12, color: Color(0xFF66FCF1)), textAlign: TextAlign.center),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildIncomeExpenseColumn('Income', 'LKR ${NumberFormat('#,##0').format(totalIncome)}', const Color(0xFF66FCF1)),
-                            Container(width: 1, height: 40, color: Colors.white24),
-                            _buildIncomeExpenseColumn('Expense', 'LKR ${NumberFormat('#,##0').format(totalExpense)}', Colors.redAccent),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              BalanceSummaryCard(transactions: transactions),
               const SizedBox(height: 24),
               const Text('Quick Actions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 12),
@@ -203,16 +66,12 @@ class HomeScreen extends StatelessWidget {
               if (transactions.isEmpty)
                 const Padding(padding: EdgeInsets.all(16.0), child: Text('No transactions yet. Click Quick Actions -> Add Entry to get started!')),
               ...transactions.take(5).map((t) => TransactionCard(transaction: t, onEdit: onEditTransaction)),
-              const SizedBox(height: 80),
+              const SizedBox(height: 100),
             ],
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildIncomeExpenseColumn(String label, String amount, Color color) {
-    return Column(children: [Text(label, style: const TextStyle(fontSize: 12, color: Colors.white70)), const SizedBox(height: 4), Text(amount, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color))]);
   }
 
   Widget _buildQuickAction(BuildContext context, IconData icon, String label, VoidCallback onTap) {

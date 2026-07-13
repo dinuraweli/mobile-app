@@ -13,6 +13,7 @@ class LearningScreen extends StatelessWidget {
           _buildArticleCard('How to register for a TIN in Sri Lanka', 'Step-by-step visual guide for 2026.'),
           _buildArticleCard('Central Bank Policy Rates Update', 'What the latest CBSL decisions mean for your loans.'),
           _buildArticleCard('Understanding the EPF / ETF', 'How to check your balance and claim benefits.'),
+          const SizedBox(height: 100),
         ],
       ),
     );

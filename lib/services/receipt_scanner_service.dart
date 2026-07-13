@@ -80,7 +80,7 @@ class ReceiptScannerService {
   // ==================== RECEIPT PARSING ====================
   
   /// Main method to scan and parse a receipt
-  Future<ReceiptScanResult> scanReceipt(File imageFile) async {
+  Future<ReceiptScanResult> scanReceipt(File imageFile, {required int userId}) async {
     try {
       debugPrint('🔍 Scanning receipt...');
       
@@ -350,7 +350,7 @@ If the receipt is unreadable, return:
     final List<ReceiptScanResult> results = [];
     
     for (var image in images) {
-      final result = await scanReceipt(image);
+      final result = await scanReceipt(image, userId: 0); // Default userId for batch
       results.add(result);
     }
     
@@ -388,10 +388,11 @@ class ReceiptScanResult {
   });
 
   /// Convert to AppTransaction for saving
-  AppTransaction? toTransaction() {
+  AppTransaction? toTransaction(int userId) {
     if (!success || amount == null || vendor == null) return null;
 
     return AppTransaction.create(
+      userId: userId,
       bank: 'Cash/Other',
       bankName: paymentMethod == 'Card' ? 'Card Payment' : 'Cash/Other',
       amount: amount!,

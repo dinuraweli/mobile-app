@@ -10,6 +10,7 @@ class AppTransaction {
   @Index(unique: true, replace: true)
   late String transactionId;
 
+  late int userId;
   late String bank;
   late String bankName;
   late double amount;
@@ -70,6 +71,7 @@ class AppTransaction {
   AppTransaction({
     this.id = Isar.autoIncrement,
     required this.transactionId,
+    required this.userId,
     required this.bank,
     this.bankName = '',
     required this.amount,
@@ -89,6 +91,7 @@ class AppTransaction {
 
   // Convenience factory - use this everywhere in your app!
   factory AppTransaction.create({
+    required int userId,
     required String bank,
     String bankName = '',
     required double amount,
@@ -105,6 +108,7 @@ class AppTransaction {
   }) {
     return AppTransaction(
       transactionId: DateTime.now().millisecondsSinceEpoch.toString(),
+      userId: userId,
       bank: bank,
       bankName: bankName.isEmpty ? bank : bankName,
       amount: amount,
@@ -124,6 +128,7 @@ class AppTransaction {
 
   Map<String, dynamic> toJson() => {
         'id': transactionId,
+        'userId': userId,
         'bank': bank,
         'bankName': bankName,
         'amount': amount,
@@ -138,6 +143,7 @@ class AppTransaction {
       };
 
   factory AppTransaction.fromJson(Map<String, dynamic> json) => AppTransaction.create(
+        userId: json['userId'] ?? 0,
         bank: json['bank']?.toString() ?? 'Unknown',
         bankName: json['bankName']?.toString() ?? '',
         amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,

@@ -11,11 +11,13 @@ import 'package:image_picker/image_picker.dart';
 class AddTransactionScreen extends StatefulWidget {
   final Function(AppTransaction) onTransactionExtracted;
   final Map<String, String> learningRules;
+  final int userId;
 
   const AddTransactionScreen({
     super.key,
     required this.onTransactionExtracted,
     required this.learningRules,
+    required this.userId,
   });
 
   @override
@@ -137,6 +139,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       }
 
       final newTransaction = AppTransaction.create(
+        userId: widget.userId,
         bank: parsedJson['bank']?.toString() ?? 'Unknown',
         bankName: parsedJson['bankName']?.toString() ?? parsedJson['bank']?.toString() ?? 'Unknown',
         amount: extractedAmount,
@@ -200,7 +203,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       setState(() => _selectedImage = imageFile);
 
       // Scan the receipt
-      final result = await _receiptScanner.scanReceipt(imageFile);
+      final result = await _receiptScanner.scanReceipt(imageFile, userId: widget.userId);
 
       if (!mounted) return;
 
@@ -211,7 +214,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
       if (result.success) {
         // Auto-fill the transaction
-        final transaction = result.toTransaction();
+        final transaction = result.toTransaction(widget.userId);
         if (transaction != null) {
           widget.onTransactionExtracted(transaction);
           _showScanSuccessDialog(result);
@@ -327,6 +330,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       }
 
       widget.onTransactionExtracted(AppTransaction.create(
+        userId: widget.userId,
         bank: _selectedBank,
         bankName: _selectedBank,
         amount: amount,

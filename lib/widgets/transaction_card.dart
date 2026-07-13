@@ -96,18 +96,19 @@ class TransactionCard extends StatelessWidget {
               onPressed: () {
                 double newAmt = double.tryParse(amtCtrl.text) ?? transaction.amount;
                 AppTransaction updated = AppTransaction.create(
-  bank: transaction.bank,
-  bankName: transaction.bankName,
-  amount: newAmt,
-  merchant: merCtrl.text,
-  type: transaction.type,
-  date: transaction.date,
-  category: selCat,
-  accountType: transaction.accountType,
-  accountMask: transaction.accountMask,
-  availableBalance: transaction.availableBalance,
-  source: transaction.source,
-);
+                  userId: transaction.userId,
+                  bank: transaction.bank,
+                  bankName: transaction.bankName,
+                  amount: newAmt,
+                  merchant: merCtrl.text,
+                  type: transaction.type,
+                  date: transaction.date,
+                  category: selCat,
+                  accountType: transaction.accountType,
+                  accountMask: transaction.accountMask,
+                  availableBalance: transaction.availableBalance,
+                  source: transaction.source,
+                );
                 onEdit(transaction, updated);
                 Navigator.pop(context);
               },

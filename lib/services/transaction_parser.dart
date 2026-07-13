@@ -26,7 +26,7 @@ class TransactionParser {
 
   // ==================== MAIN PARSING METHOD ====================
   
-  static Future<AppTransaction?> parse(String smsBody) async {
+  static Future<AppTransaction?> parse(String smsBody, {required int userId}) async {
     if (smsBody.trim().isEmpty) return null;
 
     // TIER 0: Block spam/OTP immediately
@@ -36,25 +36,25 @@ class TransactionParser {
     }
 
     // TIER 1: Check exact match cache
-    final exactHash = smsBody.trim().toLowerCase();
+    final exactHash = '${userId}_${smsBody.trim().toLowerCase()}';
     if (_exactMatchCache.containsKey(exactHash)) {
       debugPrint('💾 Tier 1: Exact cache hit');
       return _exactMatchCache[exactHash];
     }
 
     // Check similar pattern cache
-    final patternHash = _normalizeForCache(smsBody);
+    final patternHash = '${userId}_${_normalizeForCache(smsBody)}';
     if (_patternCache.containsKey(patternHash)) {
       debugPrint('💾 Tier 1: Pattern cache hit');
       final data = _patternCache[patternHash]!;
-      final transaction = _buildTransaction(data, smsBody);
+      final transaction = _buildTransaction(data, smsBody, userId);
       _exactMatchCache[exactHash] = transaction;
       return transaction;
     }
 
     // TIER 2: PRIMARY - Gemini API
     debugPrint('🤖 Tier 2: Calling Gemini API');
-    final geminiResult = await _tryGemini(smsBody);
+    final geminiResult = await _tryGemini(smsBody, userId);
     
     if (geminiResult != null) {
       // Cache for future
@@ -75,7 +75,7 @@ class TransactionParser {
 
     // TIER 3: FALLBACK - Regex (only if Gemini completely fails)
     debugPrint('⚠️ Tier 3: Gemini failed, trying regex fallback');
-    final regexResult = _tryRegexFallback(smsBody);
+    final regexResult = _tryRegexFallback(smsBody, userId);
     
     if (regexResult != null) {
       // Still cache it, but mark as lower confidence
@@ -109,7 +109,7 @@ class TransactionParser {
 
   // ==================== TIER 2: GEMINI (PRIMARY) ====================
   
-  static Future<AppTransaction?> _tryGemini(String smsBody) async {
+  static Future<AppTransaction?> _tryGemini(String smsBody, int userId) async {
     if (!ApiConfig.isGeminiConfigured) {
       debugPrint('⚠️ Gemini API key not configured, skipping to regex');
       return null;
@@ -201,7 +201,7 @@ If ABSOLUTELY no transaction can be found (no amount, no monetary activity):
         return null;
       }
 
-      return _buildTransaction(data, smsBody);
+      return _buildTransaction(data, smsBody, userId);
     } catch (e) {
       debugPrint('Gemini API error: $e');
       return null;
@@ -210,7 +210,7 @@ If ABSOLUTELY no transaction can be found (no amount, no monetary activity):
 
   // ==================== TIER 3: REGEX FALLBACK ====================
   
-  static AppTransaction? _tryRegexFallback(String sms) {
+  static AppTransaction? _tryRegexFallback(String sms, int userId) {
     debugPrint('🔧 Attempting regex fallback...');
     
     // Only use regex when Gemini completely fails (network error, API down, etc.)
@@ -316,6 +316,7 @@ If ABSOLUTELY no transaction can be found (no amount, no monetary activity):
     debugPrint('⚠️ Regex fallback: $amount at $merchant ($type) - LOW CONFIDENCE');
 
     return AppTransaction.create(
+      userId: userId,
       bank: bank,
       bankName: bank,
       amount: amount,
@@ -333,8 +334,9 @@ If ABSOLUTELY no transaction can be found (no amount, no monetary activity):
 
   // ==================== HELPER METHODS ====================
   
-  static AppTransaction _buildTransaction(Map<String, dynamic> data, String smsBody) {
+  static AppTransaction _buildTransaction(Map<String, dynamic> data, String smsBody, int userId) {
     return AppTransaction.create(
+      userId: userId,
       bank: data['bank']?.toString() ?? 'Unknown',
       bankName: data['bankName']?.toString() ?? data['bank']?.toString() ?? 'Unknown',
       amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,

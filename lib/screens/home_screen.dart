@@ -7,6 +7,7 @@ import 'history_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final String userName;
+  final int userId;
   final List<AppTransaction> transactions;
   final Map<String, String> customCategories;
   final VoidCallback onReset;
@@ -18,6 +19,7 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     this.userName = 'User',
+    required this.userId,
     required this.transactions,
     required this.onReset,
     required this.onAddNewTransaction,
@@ -77,7 +79,7 @@ class HomeScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _buildQuickAction(context, Icons.add_circle_outline, 'Add Entry', () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => AddTransactionScreen(onTransactionExtracted: onAddNewTransaction, learningRules: customCategories)));
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => AddTransactionScreen(onTransactionExtracted: onAddNewTransaction, learningRules: customCategories, userId: userId)));
                   }),
                   _buildQuickAction(context, Icons.list_alt, 'History', () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => TransactionHistoryScreen(transactions: transactions, onEdit: onEditTransaction)));

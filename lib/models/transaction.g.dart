@@ -96,6 +96,11 @@ const AppTransactionSchema = CollectionSchema(
       id: 15,
       name: r'type',
       type: IsarType.string,
+    ),
+    r'userId': PropertySchema(
+      id: 16,
+      name: r'userId',
+      type: IsarType.long,
     )
   },
   estimateSize: _appTransactionEstimateSize,
@@ -186,6 +191,7 @@ void _appTransactionSerialize(
   writer.writeString(offsets[13], object.source);
   writer.writeString(offsets[14], object.transactionId);
   writer.writeString(offsets[15], object.type);
+  writer.writeLong(offsets[16], object.userId);
 }
 
 AppTransaction _appTransactionDeserialize(
@@ -212,6 +218,7 @@ AppTransaction _appTransactionDeserialize(
     source: reader.readStringOrNull(offsets[13]) ?? 'manual',
     transactionId: reader.readString(offsets[14]),
     type: reader.readString(offsets[15]),
+    userId: reader.readLong(offsets[16]),
   );
   return object;
 }
@@ -255,6 +262,8 @@ P _appTransactionDeserializeProp<P>(
       return (reader.readString(offset)) as P;
     case 15:
       return (reader.readString(offset)) as P;
+    case 16:
+      return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -2427,6 +2436,62 @@ extension AppTransactionQueryFilter
       ));
     });
   }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      userIdEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'userId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      userIdGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'userId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      userIdLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'userId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      userIdBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'userId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension AppTransactionQueryObject
@@ -2645,6 +2710,19 @@ extension AppTransactionQuerySortBy
   QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy> sortByTypeDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'type', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy> sortByUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      sortByUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.desc);
     });
   }
 }
@@ -2873,6 +2951,19 @@ extension AppTransactionQuerySortThenBy
       return query.addSortBy(r'type', Sort.desc);
     });
   }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy> thenByUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      thenByUserIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'userId', Sort.desc);
+    });
+  }
 }
 
 extension AppTransactionQueryWhereDistinct
@@ -2987,6 +3078,12 @@ extension AppTransactionQueryWhereDistinct
       return query.addDistinctBy(r'type', caseSensitive: caseSensitive);
     });
   }
+
+  QueryBuilder<AppTransaction, AppTransaction, QDistinct> distinctByUserId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'userId');
+    });
+  }
 }
 
 extension AppTransactionQueryProperty
@@ -3093,6 +3190,12 @@ extension AppTransactionQueryProperty
   QueryBuilder<AppTransaction, String, QQueryOperations> typeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'type');
+    });
+  }
+
+  QueryBuilder<AppTransaction, int, QQueryOperations> userIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'userId');
     });
   }
 }

@@ -52,7 +52,7 @@ class _MainNavigationState extends State<MainNavigation> {
   Future<void> _loadTransactions() async {
     setState(() => _isLoading = true);
     try {
-      final transactions = await DatabaseService().getAllTransactions();
+      final transactions = await DatabaseService().getTransactionsByUserId(widget.currentUser.id);
       setState(() {
         _transactions = transactions;
         _isLoading = false;
@@ -108,7 +108,7 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   Future<void> _processTransactionSMS(String smsBody) async {
-    final transaction = await TransactionParser.parse(smsBody);
+    final transaction = await TransactionParser.parse(smsBody, userId: widget.currentUser.id);
 
     if (transaction != null && transaction.amount > 0) {
       _handleNewTransaction(transaction);
@@ -142,7 +142,7 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   void _handleReset() async {
-    await DatabaseService().clearAllTransactions();
+    await DatabaseService().clearAllTransactions(userId: widget.currentUser.id);
     setState(() {
       _transactions.clear();
     });
@@ -174,6 +174,7 @@ class _MainNavigationState extends State<MainNavigation> {
         children: [
           HomeScreen(
             userName: widget.currentUser.name,
+            userId: widget.currentUser.id,
             transactions: _transactions,
             customCategories: _customCategories,
             onReset: _handleReset,

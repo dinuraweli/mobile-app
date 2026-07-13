@@ -2,6 +2,7 @@
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/transaction.dart';
+import '../models/user.dart';
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -16,7 +17,7 @@ class DatabaseService {
     
     final dir = await getApplicationDocumentsDirectory();
     isar = await Isar.open(
-      [AppTransactionSchema],
+      [AppTransactionSchema, AppUserSchema],
       directory: dir.path,
       inspector: true,
     );
@@ -52,6 +53,48 @@ class DatabaseService {
   Future<void> clearAllTransactions() async {
     await isar.writeTxn(() async {
       await isar.appTransactions.clear();
+    });
+  }
+
+  // ==================== USER OPERATIONS ====================
+
+  Future<int> saveUser(AppUser user) async {
+    return await isar.writeTxn(() async {
+      return await isar.appUsers.put(user);
+    });
+  }
+
+  Future<AppUser?> getUserByEmail(String email) async {
+    return await isar.appUsers
+        .filter()
+        .emailEqualTo(email.toLowerCase().trim())
+        .findFirst();
+  }
+
+  Future<AppUser?> getLoggedInUser() async {
+    return await isar.appUsers
+        .filter()
+        .isLoggedInEqualTo(true)
+        .findFirst();
+  }
+
+  Future<List<AppUser>> getAllUsers() async {
+    return await isar.appUsers.where().findAll();
+  }
+
+  Future<void> logoutAllUsers() async {
+    final users = await isar.appUsers.filter().isLoggedInEqualTo(true).findAll();
+    for (var user in users) {
+      user.isLoggedIn = false;
+    }
+    await isar.writeTxn(() async {
+      await isar.appUsers.putAll(users);
+    });
+  }
+
+  Future<void> updateUser(AppUser user) async {
+    await isar.writeTxn(() async {
+      await isar.appUsers.put(user);
     });
   }
   

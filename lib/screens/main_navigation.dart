@@ -1,22 +1,33 @@
 // File: lib/screens/main_navigation.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:telephony/telephony.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import '../config/api_config.dart';
 import '../models/transaction.dart';
+import '../models/user.dart';
 import '../services/database_service.dart';
-import '../utils/sms_validator.dart';
 import '../services/transaction_parser.dart';
+import '../utils/sms_validator.dart';
 import '../widgets/floating_nav_bar.dart';
 
 import 'home_screen.dart';
+import 'insights_screen.dart';
 import 'financial_tools_screen.dart';
 import 'learning_screen.dart';
 import 'sallibot_screen.dart';
-import 'insights_screen.dart';
 
 class MainNavigation extends StatefulWidget {
-  const MainNavigation({super.key});
+  final AppUser currentUser;
+  final VoidCallback onLogout;
+
+  const MainNavigation({
+    super.key,
+    required this.currentUser,
+    required this.onLogout,
+  });
 
   @override
   State<MainNavigation> createState() => _MainNavigationState();
@@ -30,7 +41,6 @@ class _MainNavigationState extends State<MainNavigation> {
   Map<String, String> _customCategories = {};
   bool _isLoading = true;
 
-
   @override
   void initState() {
     super.initState();
@@ -38,8 +48,6 @@ class _MainNavigationState extends State<MainNavigation> {
     _initSmsListener();
     _checkPendingSms();
   }
-
-  // ==================== DATABASE OPERATIONS ====================
 
   Future<void> _loadTransactions() async {
     setState(() => _isLoading = true);
@@ -58,13 +66,10 @@ class _MainNavigationState extends State<MainNavigation> {
   Future<void> _saveTransactionToDb(AppTransaction transaction) async {
     try {
       await DatabaseService().saveTransaction(transaction);
-      debugPrint('✅ Transaction saved to database');
     } catch (e) {
       debugPrint("Error saving transaction: $e");
     }
   }
-
-  // ==================== SMS HANDLING ====================
 
   void _initSmsListener() async {
     bool? permissionsGranted = await telephony.requestPhoneAndSmsPermissions;
@@ -75,10 +80,7 @@ class _MainNavigationState extends State<MainNavigation> {
           String body = message.body ?? '';
 
           if (SmsValidator.isBankTransaction(sender, body)) {
-            debugPrint("Valid bank SMS detected from $sender. Processing...");
             _processTransactionSMS(body);
-          } else {
-            debugPrint("Ignored non-transactional SMS from $sender.");
           }
         },
         listenInBackground: false,
@@ -93,12 +95,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
     var box = Hive.box<String>('pending_sms');
 
-    if (box.isEmpty) {
-      debugPrint('No pending background SMS.');
-      return;
-    }
-
-    debugPrint('Found ${box.length} pending SMS messages!');
+    if (box.isEmpty) return;
 
     for (int i = 0; i < box.length; i++) {
       String? rawSms = box.getAt(i);
@@ -109,8 +106,6 @@ class _MainNavigationState extends State<MainNavigation> {
 
     await box.clear();
   }
-
-  // ==================== TRANSACTION PROCESSING ====================
 
   Future<void> _processTransactionSMS(String smsBody) async {
     final transaction = await TransactionParser.parse(smsBody);
@@ -129,23 +124,15 @@ class _MainNavigationState extends State<MainNavigation> {
     }
   }
 
-  // ==================== TRANSACTION MANAGEMENT ====================
-
   void _handleNewTransaction(AppTransaction transaction) {
-    // Save to database
     _saveTransactionToDb(transaction);
-
-    // Update UI
     setState(() {
       _transactions.insert(0, transaction);
     });
   }
 
   void _handleEditTransaction(AppTransaction oldTx, AppTransaction newTx) async {
-    // Update in database
     await DatabaseService().updateTransaction(newTx);
-
-    // Update UI
     setState(() {
       final index = _transactions.indexWhere((t) => t.transactionId == oldTx.transactionId);
       if (index != -1) {
@@ -155,33 +142,24 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   void _handleReset() async {
-    // Clear database
     await DatabaseService().clearAllTransactions();
-
-    // Clear UI
     setState(() {
       _transactions.clear();
     });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('🗑️ All transactions cleared')),
-      );
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
+        backgroundColor: const Color(0xFF0B0C10),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const CircularProgressIndicator(color: Color(0xFF66FCF1)),
               const SizedBox(height: 16),
-              Text('Loading your finances...',
-                  style: TextStyle(color: Colors.white70)),
+              Text('Loading...', style: TextStyle(color: Colors.white70)),
             ],
           ),
         ),
@@ -195,12 +173,14 @@ class _MainNavigationState extends State<MainNavigation> {
         index: _currentIndex,
         children: [
           HomeScreen(
+            userName: widget.currentUser.name,
             transactions: _transactions,
             customCategories: _customCategories,
             onReset: _handleReset,
             onAddNewTransaction: _handleNewTransaction,
             onEditTransaction: _handleEditTransaction,
             isListeningSms: true,
+            onLogout: widget.onLogout,
           ),
           InsightsScreen(transactions: _transactions),
           const FinancialToolsScreen(),

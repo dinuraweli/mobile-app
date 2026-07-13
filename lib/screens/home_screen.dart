@@ -2,26 +2,29 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../widgets/balance_summary_card.dart';
 import '../widgets/transaction_card.dart';
-import 'insights_screen.dart';
 import 'add_transaction_screen.dart';
 import 'history_screen.dart';
 
 class HomeScreen extends StatelessWidget {
+  final String userName;
   final List<AppTransaction> transactions;
   final Map<String, String> customCategories;
   final VoidCallback onReset;
   final Function(AppTransaction) onAddNewTransaction;
   final Function(AppTransaction, AppTransaction) onEditTransaction;
   final bool isListeningSms;
+  final VoidCallback? onLogout;
 
   const HomeScreen({
-    super.key, 
-    required this.transactions, 
-    required this.onReset, 
-    required this.onAddNewTransaction, 
-    required this.onEditTransaction, 
+    super.key,
+    this.userName = 'User',
+    required this.transactions,
+    required this.onReset,
+    required this.onAddNewTransaction,
+    required this.onEditTransaction,
     required this.customCategories,
     this.isListeningSms = false,
+    this.onLogout,
   });
 
   @override
@@ -30,13 +33,35 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Welcome, Kasun!'),
+            Text('Welcome, ${userName.split(' ')[0]}!'),
             const SizedBox(width: 8),
-            if (isListeningSms) Tooltip(message: 'Auto-Sync Active', child: Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.greenAccent, shape: BoxShape.circle)))
+            if (isListeningSms)
+              Tooltip(
+                message: 'Auto-Sync Active',
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.greenAccent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
           ],
         ),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: () { onReset(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Data cleared!'))); })],
+        actions: [
+          if (onLogout != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: onLogout,
+              tooltip: 'Logout',
+            ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: onReset,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: Padding(

@@ -4,8 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:telephony/telephony.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'screens/main_navigation.dart';
+import 'screens/auth_screen.dart';
 import 'utils/sms_validator.dart';
 import 'services/database_service.dart';
+import 'services/auth_service.dart';
+import 'models/user.dart';
 
 @pragma('vm:entry-point')
 backgroundMessageHandler(SmsMessage message) async {
@@ -25,21 +28,91 @@ backgroundMessageHandler(SmsMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Hive for background SMS
   await Hive.initFlutter();
   await Hive.openBox<String>('pending_sms');
   
-  // Initialize Isar Database
   await DatabaseService().initialize();
   
   runApp(const SalliMateApp());
 }
 
-class SalliMateApp extends StatelessWidget {
+class SalliMateApp extends StatefulWidget {
   const SalliMateApp({super.key});
 
   @override
+  State<SalliMateApp> createState() => _SalliMateAppState();
+}
+
+class _SalliMateAppState extends State<SalliMateApp> {
+  AppUser? _currentUser;
+  bool _isCheckingAuth = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthStatus();
+  }
+
+  Future<void> _checkAuthStatus() async {
+    final authService = AuthService();
+    final loggedInUser = await authService.checkLoggedInUser();
+    
+    if (mounted) {
+      setState(() {
+        _currentUser = loggedInUser;
+        _isCheckingAuth = false;
+      });
+    }
+  }
+
+  void _onLoginSuccess(AppUser user) {
+    setState(() {
+      _currentUser = user;
+    });
+  }
+
+  void _onLogout() async {
+    if (_currentUser != null) {
+      await AuthService().logout(_currentUser!);
+    }
+    setState(() {
+      _currentUser = null;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isCheckingAuth) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: const Color(0xFF0B0C10),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF66FCF1), Color(0xFF45A29E)],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Center(
+                    child: Text('SM', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF0B0C10))),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const CircularProgressIndicator(color: Color(0xFF66FCF1)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return MaterialApp(
       title: 'SalliMate',
       debugShowCheckedModeBanner: false,
@@ -63,7 +136,9 @@ class SalliMateApp extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
       ),
-      home: const MainNavigation(),
+      home: _currentUser != null
+          ? MainNavigation(currentUser: _currentUser!, onLogout: _onLogout)
+          : AuthScreen(onLoginSuccess: _onLoginSuccess),
     );
   }
 }

@@ -1,18 +1,17 @@
-import 'dart:convert';
+// File: lib/screens/main_navigation.dart
 import 'package:flutter/material.dart';
 import 'package:telephony/telephony.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:hive_flutter/hive_flutter.dart'; // 1. Add this import
+import 'package:hive_flutter/hive_flutter.dart';
 
-// Import your existing models and utilities
 import '../models/transaction.dart';
+import '../services/database_service.dart';
 import '../utils/sms_validator.dart';
+import '../services/transaction_parser.dart';
 
-// Import your screens
 import 'home_screen.dart';
-import 'financial_tools_screen.dart'; 
-import 'learning_screen.dart'; 
-import 'sallibot_screen.dart'; 
+import 'financial_tools_screen.dart';
+import 'learning_screen.dart';
+import 'sallibot_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -24,21 +23,46 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   final Telephony telephony = Telephony.instance;
-  
-  // The global transaction list
-  List<AppTransaction> _transactions = []; 
-  
-  // NOTE: The hardcoded _bankBalances map has been removed!
 
-  // IMPORTANT: Replace with your actual API key securely before production
-  static const String _geminiApiKey = 'AIzaSyAbC5HMYjlfpaKlgAnmlKMrldMfvcSwKgA'; 
+  List<AppTransaction> _transactions = [];
+  Map<String, String> _customCategories = {};
+  bool _isLoading = true;
+
 
   @override
   void initState() {
     super.initState();
+    _loadTransactions();
     _initSmsListener();
     _checkPendingSms();
   }
+
+  // ==================== DATABASE OPERATIONS ====================
+
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoading = true);
+    try {
+      final transactions = await DatabaseService().getAllTransactions();
+      setState(() {
+        _transactions = transactions;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Error loading transactions: $e");
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _saveTransactionToDb(AppTransaction transaction) async {
+    try {
+      await DatabaseService().saveTransaction(transaction);
+      debugPrint('✅ Transaction saved to database');
+    } catch (e) {
+      debugPrint("Error saving transaction: $e");
+    }
+  }
+
+  // ==================== SMS HANDLING ====================
 
   void _initSmsListener() async {
     bool? permissionsGranted = await telephony.requestPhoneAndSmsPermissions;
@@ -49,10 +73,10 @@ class _MainNavigationState extends State<MainNavigation> {
           String body = message.body ?? '';
 
           if (SmsValidator.isBankTransaction(sender, body)) {
-            debugPrint("Valid bank SMS detected from $sender. Sending to Gemini...");
-            _extractTransactionWithGemini(body);
+            debugPrint("Valid bank SMS detected from $sender. Processing...");
+            _processTransactionSMS(body);
           } else {
-            debugPrint("Ignored non-transactional or promotional SMS from $sender.");
+            debugPrint("Ignored non-transactional SMS from $sender.");
           }
         },
         listenInBackground: false,
@@ -76,103 +100,99 @@ class _MainNavigationState extends State<MainNavigation> {
 
     for (int i = 0; i < box.length; i++) {
       String? rawSms = box.getAt(i);
-
       if (rawSms != null && rawSms.isNotEmpty) {
-        // TODO: Pass 'rawSms' to your Gemini Service here!
-        // Example: await _geminiService.extractSmsData(rawSms);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Processing background transaction...')),
-          );
-        }
+        await _processTransactionSMS(rawSms);
       }
     }
 
     await box.clear();
   }
 
-  Future<void> _extractTransactionWithGemini(String smsBody) async {
-    try {
-      final model = GenerativeModel(
-        model: 'gemini-2.5-flash', // Updated to match your latest preference
-        apiKey: _geminiApiKey,
-        systemInstruction: Content.system(SmsValidator.geminiSystemInstruction),
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json', 
-        ),
-      );
+  // ==================== TRANSACTION PROCESSING ====================
 
-      final prompt = 'Extract the transaction details from this SMS: "$smsBody"';
-      final response = await model.generateContent([Content.text(prompt)]);
-      final String rawJson = response.text ?? '{}';
-      final Map<String, dynamic> data = jsonDecode(rawJson);
+  Future<void> _processTransactionSMS(String smsBody) async {
+    final transaction = await TransactionParser.parse(smsBody);
 
-      if (data.containsKey('error')) {
-        debugPrint("Gemini Failsafe Triggered: ${data['error']} - SMS: $smsBody");
-        return; 
+    if (transaction != null && transaction.amount > 0) {
+      _handleNewTransaction(transaction);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ LKR ${transaction.amount.toStringAsFixed(0)} at ${transaction.merchant}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
-
-      final newTransaction = AppTransaction.create(
-  bank: data['bank']?.toString() ?? 'Unknown Bank',
-  bankName: data['bankName']?.toString() ?? data['bank']?.toString() ?? 'Unknown Bank',
-  amount: double.tryParse(data['amount']?.toString() ?? '0') ?? 0.0,
-  merchant: data['merchant']?.toString() ?? 'Unknown',
-  type: data['type']?.toString() ?? 'Debit',
-  date: "Today",
-  category: data['category']?.toString() ?? 'General',
-  accountType: 'Account',
-  accountMask: data['accountMask']?.toString() ?? '',
-  availableBalance: data['availableBalance'] != null ? double.tryParse(data['availableBalance'].toString()) : null,
-  source: 'sms',
-  smsRawText: smsBody,
-);
-
-      if (newTransaction.amount > 0) {
-        _handleNewTransaction(newTransaction);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Logged LKR ${newTransaction.amount} at ${newTransaction.merchant}'), backgroundColor: Colors.green),
-          );
-        }
-      }
-
-    } catch (e) {
-      debugPrint("Error extracting transaction: $e");
     }
   }
 
+  // ==================== TRANSACTION MANAGEMENT ====================
+
   void _handleNewTransaction(AppTransaction transaction) {
+    // Save to database
+    _saveTransactionToDb(transaction);
+
+    // Update UI
     setState(() {
       _transactions.insert(0, transaction);
     });
   }
 
-  void _handleEditTransaction(AppTransaction oldTx, AppTransaction newTx) {
+  void _handleEditTransaction(AppTransaction oldTx, AppTransaction newTx) async {
+    // Update in database
+    await DatabaseService().updateTransaction(newTx);
+
+    // Update UI
     setState(() {
-      final index = _transactions.indexOf(oldTx);
+      final index = _transactions.indexWhere((t) => t.transactionId == oldTx.transactionId);
       if (index != -1) {
         _transactions[index] = newTx;
       }
     });
   }
 
-  void _handleReset() {
+  void _handleReset() async {
+    // Clear database
+    await DatabaseService().clearAllTransactions();
+
+    // Clear UI
     setState(() {
       _transactions.clear();
     });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🗑️ All transactions cleared')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Color(0xFF66FCF1)),
+              const SizedBox(height: 16),
+              Text('Loading your finances...',
+                  style: TextStyle(color: Colors.white70)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
         children: [
           HomeScreen(
             transactions: _transactions,
-            // We no longer pass bankBalances from here. The Home screen calculates it dynamically.
-            customCategories: const {},
+            customCategories: _customCategories,
             onReset: _handleReset,
             onAddNewTransaction: _handleNewTransaction,
             onEditTransaction: _handleEditTransaction,

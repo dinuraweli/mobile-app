@@ -680,7 +680,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedType,
+                    initialValue: _selectedType,
                     decoration: const InputDecoration(
                       labelText: 'Type',
                       border: OutlineInputBorder(),
@@ -694,7 +694,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedBank,
+                    initialValue: _selectedBank,
                     decoration: const InputDecoration(
                       labelText: 'Bank',
                       border: OutlineInputBorder(),
@@ -714,7 +714,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedAccountType,
+                    initialValue: _selectedAccountType,
                     decoration: const InputDecoration(
                       labelText: 'Account Type',
                       border: OutlineInputBorder(),
@@ -741,7 +741,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
             // Payment Method
             DropdownButtonFormField<String>(
-              value: _selectedPaymentMethod,
+              initialValue: _selectedPaymentMethod,
               decoration: const InputDecoration(
                 labelText: 'Payment Method',
                 border: OutlineInputBorder(),
@@ -760,7 +760,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<String>(
-                    value: _selectedCategory,
+                    initialValue: _selectedCategory,
                     decoration: const InputDecoration(
                       labelText: 'Category',
                       border: OutlineInputBorder(),

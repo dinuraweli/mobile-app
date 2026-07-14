@@ -11,7 +11,7 @@ import 'services/auth_service.dart';
 import 'models/user.dart';
 
 @pragma('vm:entry-point')
-backgroundMessageHandler(SmsMessage message) async {
+Future<void> backgroundMessageHandler(SmsMessage message) async {
   debugPrint("Background SMS received from: ${message.address}");
 
   if (SmsValidator.isBankTransaction(message.address, message.body)) {

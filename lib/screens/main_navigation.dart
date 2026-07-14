@@ -1,11 +1,8 @@
 // File: lib/screens/main_navigation.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:telephony/telephony.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-import '../config/api_config.dart';
 import '../models/transaction.dart';
 import '../models/user.dart';
 import '../services/database_service.dart';
@@ -38,7 +35,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final Telephony telephony = Telephony.instance;
 
   List<AppTransaction> _transactions = [];
-  Map<String, String> _customCategories = {};
+  final Map<String, String> _customCategories = {};
   bool _isLoading = true;
 
   @override

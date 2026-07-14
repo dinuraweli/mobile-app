@@ -43,7 +43,7 @@ class AppUser {
   // Simple password hashing (use proper crypto in production!)
   static String hashPassword(String password) {
     // This is a simple hash - use bcrypt/scrypt in production
-    return password.split('').reversed.join() + '_sallimate_hash';
+    return '${password.split('').reversed.join()}_sallimate_hash';
   }
 
   bool verifyPassword(String password) {

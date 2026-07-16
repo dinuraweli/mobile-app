@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:telephony/telephony.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'screens/main_navigation.dart';
 import 'screens/auth_screen.dart';
 import 'utils/sms_validator.dart';
 import 'services/database_service.dart';
 import 'services/auth_service.dart';
+import 'services/financial_config_service.dart';
 import 'models/user.dart';
 
 @pragma('vm:entry-point')
@@ -28,10 +30,11 @@ Future<void> backgroundMessageHandler(SmsMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  await Firebase.initializeApp();
   await Hive.initFlutter();
   await Hive.openBox<String>('pending_sms');
-  
   await DatabaseService().initialize();
+  await FinancialConfigService().initialize();
   
   runApp(const SalliMateApp());
 }
@@ -51,6 +54,7 @@ class _SalliMateAppState extends State<SalliMateApp> {
   void initState() {
     super.initState();
     _checkAuthStatus();
+    _testFinancialConfig(); // TEMPORARY - remove after testing
   }
 
   Future<void> _checkAuthStatus() async {
@@ -62,6 +66,29 @@ class _SalliMateAppState extends State<SalliMateApp> {
         _currentUser = loggedInUser;
         _isCheckingAuth = false;
       });
+    }
+  }
+
+  // TEMPORARY - Remove after testing
+  Future<void> _testFinancialConfig() async {
+    await Future.delayed(const Duration(seconds: 3));
+    
+    try {
+      final configService = FinancialConfigService();
+      final config = await configService.getConfig();
+      
+      debugPrint('═══════════════════════════════════');
+      debugPrint('📊 FINANCIAL CONFIG TEST');
+      debugPrint('═══════════════════════════════════');
+      debugPrint('Version: ${config.version}');
+      debugPrint('Source: ${config.sourceLabel}');
+      debugPrint('Tax-Free Allowance: ${config.taxFreeAllowance}');
+      debugPrint('Tax Brackets: ${config.taxBrackets.length} brackets');
+      debugPrint('EPF Employee Rate: ${config.epfEmployeeRate}');
+      debugPrint('Banks: ${config.bankLeasingRates.keys.toList()}');
+      debugPrint('═══════════════════════════════════');
+    } catch (e) {
+      debugPrint('❌ Config test failed: $e');
     }
   }
 

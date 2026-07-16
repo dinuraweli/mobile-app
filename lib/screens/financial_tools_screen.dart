@@ -704,7 +704,7 @@ class _LeasingCalculatorScreenState extends State<LeasingCalculatorScreen> {
     required Function(String?) onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       dropdownColor: const Color(0xFF1A1A2E),
       style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
@@ -934,7 +934,7 @@ class _LeasingCalculatorScreenState extends State<LeasingCalculatorScreen> {
   }
 }
 
-// ==================== FD CALCULATOR ====================
+// ==================== ENHANCED FD CALCULATOR ====================
 
 class FDCalculatorScreen extends StatefulWidget {
   const FDCalculatorScreen({super.key});
@@ -945,32 +945,71 @@ class FDCalculatorScreen extends StatefulWidget {
 
 class _FDCalculatorScreenState extends State<FDCalculatorScreen> {
   final _amountController = TextEditingController();
-  String _selectedBank = 'Commercial Bank';
   String _selectedPeriod = '1 Year';
-  String _result = '';
-  bool _calculated = false;
+  double _amount = 0;
+  bool _isCalculated = false;
+  
+  // Results per bank
+  Map<String, BankFDResult> _bankResults = {};
+  String? _bestBank;
+  double _bestReturn = 0;
+  
+  // Selected bank for detail view
+  String? _selectedDetailBank;
+
+  final List<String> _periods = ['3 Months', '6 Months', '1 Year', '2 Years', '3 Years', '5 Years'];
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
 
   void _calculate() {
-    double amount = double.tryParse(_amountController.text) ?? 0;
-    if (amount <= 0) return;
+    _amount = double.tryParse(_amountController.text) ?? 0;
+    if (_amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid deposit amount'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
 
-    double rate = SLFinancialData.fdRates[_selectedBank]?[_selectedPeriod] ?? 0.10;
-    int months = _getMonths(_selectedPeriod);
-    double maturity = amount * (1 + rate * months / 12);
-    double interest = maturity - amount;
+    // Calculate for all banks
+    _bankResults = {};
+    _bestReturn = 0;
+    _bestBank = null;
 
-    setState(() {
-      _result = '''
-Bank: $_selectedBank
-Period: $_selectedPeriod
-Interest Rate: ${(rate * 100).toStringAsFixed(2)}% p.a.
+    final fdRates = SLFinancialData.fdRates;
+    for (var bank in fdRates.keys) {
+      double rate = fdRates[bank]?[_selectedPeriod] ?? 0.10;
+      int months = _getMonths(_selectedPeriod);
+      
+      // Simple interest FD calculation
+      double interest = _amount * rate * (months / 12);
+      double maturity = _amount + interest;
+      double effectiveAnnualRate = rate;
+      
+      // For periods less than 1 year, annualize the rate
+      if (months < 12) {
+        effectiveAnnualRate = rate * (12 / months);
+      }
+      
+      _bankResults[bank] = BankFDResult(
+        bankName: bank,
+        rate: rate,
+        interest: interest,
+        maturity: maturity,
+        months: months,
+        effectiveAnnualRate: effectiveAnnualRate,
+      );
+      
+      if (maturity > _bestReturn) {
+        _bestReturn = maturity;
+        _bestBank = bank;
+      }
+    }
 
-Investment: LKR ${NumberFormat('#,##0.00').format(amount)}
-Interest Earned: LKR ${NumberFormat('#,##0.00').format(interest)}
-Maturity Amount: LKR ${NumberFormat('#,##0.00').format(maturity)}
-''';
-      _calculated = true;
-    });
+    setState(() => _isCalculated = true);
   }
 
   int _getMonths(String period) {
@@ -987,90 +1026,500 @@ Maturity Amount: LKR ${NumberFormat('#,##0.00').format(maturity)}
 
   @override
   Widget build(BuildContext context) {
-    var periods = SLFinancialData.fdRates[_selectedBank]?.keys.toList() ?? ['1 Year'];
-
     return Scaffold(
       backgroundColor: const Color(0xFF0B0C10),
-      appBar: AppBar(title: const Text('Fixed Deposit Calculator'), backgroundColor: const Color(0xFF1A1A2E)),
+      appBar: AppBar(
+        title: const Text('Fixed Deposit Calculator'),
+        backgroundColor: const Color(0xFF1A1A2E),
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInput('Deposit Amount (LKR)', _amountController),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedBank,
-              dropdownColor: const Color(0xFF1A1A2E),
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Bank',
-                filled: true,
-                fillColor: const Color(0xFF1A1A2E),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-              ),
-              items: SLFinancialData.fdRates.keys.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-              onChanged: (val) {
-                setState(() {
-                  _selectedBank = val!;
-                  _selectedPeriod = SLFinancialData.fdRates[_selectedBank]?.keys.first ?? '1 Year';
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedPeriod,
-              dropdownColor: const Color(0xFF1A1A2E),
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Period',
-                filled: true,
-                fillColor: const Color(0xFF1A1A2E),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-              ),
-              items: periods.map((p) => DropdownMenuItem(value: p, child: Text(p))).toList(),
-              onChanged: (val) => setState(() => _selectedPeriod = val!),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _calculate,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF66FCF1),
-                foregroundColor: const Color(0xFF0B0C10),
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: const Text('Calculate Returns', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-            if (_calculated) ...[
+            // Input Section
+            _buildInputSection(),
+            const SizedBox(height: 24),
+            
+            // Calculate Button
+            _buildCalculateButton(),
+
+            if (_isCalculated) ...[
+              const SizedBox(height: 28),
+              
+              // Best Bank Highlight
+              _buildBestBankCard(),
               const SizedBox(height: 24),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16)),
-                child: Text(_result, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.6)),
-              ),
+              
+              // Bank Comparison Chart
+              _buildComparisonChart(),
+              const SizedBox(height: 24),
+              
+              // All Banks Detail
+              _buildAllBanksList(),
+              const SizedBox(height: 24),
+              
+              // Selected Bank Detail
+              if (_selectedDetailBank != null)
+                _buildBankDetailCard(),
+              const SizedBox(height: 24),
+              
+              // How FD Works
+              _buildHowItWorks(),
+              const SizedBox(height: 24),
+              
+              // Calculation Formula
+              _buildCalculationFormula(),
+              const SizedBox(height: 24),
+              
+              // Disclaimer
+              _buildDisclaimer(),
             ],
-            const SizedBox(height: 100),
+            const SizedBox(height: 120),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInput(String label, TextEditingController controller) {
-    return TextField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      style: const TextStyle(color: Colors.white, fontSize: 18),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: const Icon(Icons.money, color: Color(0xFF66FCF1)),
-        filled: true,
-        fillColor: const Color(0xFF1A1A2E),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+  // ==================== INPUT SECTION ====================
+
+  Widget _buildInputSection() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFF42A5F5).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+              child: const Icon(Icons.savings_rounded, color: Color(0xFF42A5F5), size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Text('FD Investment Details', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 20),
+          
+          // Amount Input
+          TextField(
+            controller: _amountController,
+            keyboardType: TextInputType.number,
+            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(
+              labelText: 'Deposit Amount (LKR)',
+              hintText: 'e.g., 500,000',
+              hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+              filled: true,
+              fillColor: const Color(0xFF0B0C10),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFF42A5F5), width: 1)),
+              prefixIcon: const Icon(Icons.money_outlined, color: Color(0xFF42A5F5)),
+            ),
+          ),
+          const SizedBox(height: 16),
+          
+          // Period Selector
+          const Text('Select Deposit Period:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _periods.map((period) {
+              bool isSelected = _selectedPeriod == period;
+              return ChoiceChip(
+                label: Text(period, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? const Color(0xFF0B0C10) : Colors.white70)),
+                selected: isSelected,
+                onSelected: (_) => setState(() => _selectedPeriod = period),
+                selectedColor: const Color(0xFF42A5F5),
+                backgroundColor: const Color(0xFF0B0C10),
+                side: BorderSide(color: isSelected ? const Color(0xFF42A5F5) : Colors.white.withOpacity(0.1)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
+
+  Widget _buildCalculateButton() {
+    return ElevatedButton(
+      onPressed: _calculate,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF42A5F5),
+        foregroundColor: Colors.white,
+        minimumSize: const Size(double.infinity, 56),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+      ),
+      child: const Text('Compare FD Rates', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  // ==================== BEST BANK CARD ====================
+
+  Widget _buildBestBankCard() {
+    if (_bestBank == null) return const SizedBox();
+    final best = _bankResults[_bestBank]!;
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [const Color(0xFF4CAF50).withOpacity(0.2), const Color(0xFF4CAF50).withOpacity(0.05)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(children: [
+            const Icon(Icons.emoji_events, color: Color(0xFFFFD700), size: 28),
+            const SizedBox(width: 10),
+            const Text('Best Return', style: TextStyle(color: Color(0xFF4CAF50), fontSize: 20, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 16),
+          Text(best.bankName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('${(best.rate * 100).toStringAsFixed(2)}% p.a.', style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 28, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 16),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            _buildBestStat('Investment', 'LKR ${NumberFormat('#,##0').format(_amount)}'),
+            Container(width: 1, height: 40, color: Colors.white10),
+            _buildBestStat('Interest', 'LKR ${NumberFormat('#,##0').format(best.interest)}'),
+            Container(width: 1, height: 40, color: Colors.white10),
+            _buildBestStat('Maturity', 'LKR ${NumberFormat('#,##0').format(best.maturity)}'),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBestStat(String label, String value) {
+    return Column(children: [
+      Text(value, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+      const SizedBox(height: 2),
+      Text(label, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
+    ]);
+  }
+
+  // ==================== COMPARISON CHART ====================
+
+  Widget _buildComparisonChart() {
+    if (_bankResults.isEmpty) return const SizedBox();
+    
+    // Sort banks by maturity amount
+    var sorted = _bankResults.entries.toList()
+      ..sort((a, b) => b.value.maturity.compareTo(a.value.maturity));
+    
+    double maxMaturity = sorted.first.value.maturity;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Bank Comparison', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('$_selectedPeriod deposit of LKR ${NumberFormat('#,##0').format(_amount)}', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
+          const SizedBox(height: 20),
+          ...sorted.map((entry) {
+            double pct = (entry.value.maturity / maxMaturity * 100);
+            bool isBest = entry.key == _bestBank;
+            
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    Row(children: [
+                      if (isBest) const Icon(Icons.star, color: Color(0xFFFFD700), size: 16),
+                      if (isBest) const SizedBox(width: 4),
+                      Text(entry.key, style: TextStyle(color: isBest ? const Color(0xFFFFD700) : Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                    ]),
+                    Text('LKR ${NumberFormat('#,##0').format(entry.value.maturity)}', style: TextStyle(color: isBest ? const Color(0xFFFFD700) : const Color(0xFF42A5F5), fontWeight: FontWeight.bold, fontSize: 13)),
+                  ]),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: pct / 100,
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      valueColor: AlwaysStoppedAnimation<Color>(isBest ? const Color(0xFFFFD700) : const Color(0xFF42A5F5)),
+                      minHeight: 6,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ==================== ALL BANKS LIST ====================
+
+  Widget _buildAllBanksList() {
+    var sorted = _bankResults.entries.toList()
+      ..sort((a, b) => b.value.maturity.compareTo(a.value.maturity));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('All Bank Rates', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text('Tap a bank for full details', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
+        const SizedBox(height: 12),
+        ...sorted.map((entry) {
+          bool isSelected = _selectedDetailBank == entry.key;
+          bool isBest = entry.key == _bestBank;
+          
+          return GestureDetector(
+            onTap: () => setState(() => _selectedDetailBank = isSelected ? null : entry.key),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1A2E),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: isSelected ? const Color(0xFF42A5F5) : Colors.white.withOpacity(0.05), width: isSelected ? 1.5 : 1),
+              ),
+              child: Row(children: [
+                if (isBest)
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFFFFD700).withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                    child: const Text('Best', style: TextStyle(color: Color(0xFFFFD700), fontSize: 9, fontWeight: FontWeight.bold)),
+                  ),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(entry.key, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14)),
+                    const SizedBox(height: 2),
+                    Text('${(entry.value.rate * 100).toStringAsFixed(2)}% p.a. • $_selectedPeriod', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+                  ]),
+                ),
+                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                  Text('LKR ${NumberFormat('#,##0').format(entry.value.maturity)}', style: const TextStyle(color: Color(0xFF42A5F5), fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text('+LKR ${NumberFormat('#,##0').format(entry.value.interest)}', style: TextStyle(color: const Color(0xFF4CAF50).withOpacity(0.7), fontSize: 11)),
+                ]),
+              ]),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // ==================== BANK DETAIL CARD ====================
+
+  Widget _buildBankDetailCard() {
+    final detail = _bankResults[_selectedDetailBank];
+    if (detail == null) return const SizedBox();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF42A5F5).withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.account_balance, color: Color(0xFF42A5F5), size: 20),
+            const SizedBox(width: 8),
+            Text(detail.bankName, style: const TextStyle(color: Color(0xFF42A5F5), fontSize: 18, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 16),
+          _buildDetailRow('Investment Amount', 'LKR ${NumberFormat('#,##0.00').format(_amount)}'),
+          _buildDetailRow('Interest Rate', '${(detail.rate * 100).toStringAsFixed(2)}% p.a.'),
+          _buildDetailRow('Deposit Period', _selectedPeriod),
+          _buildDetailRow('Effective Annual Rate', '${(detail.effectiveAnnualRate * 100).toStringAsFixed(2)}%'),
+          const Divider(color: Colors.white10, height: 20),
+          _buildDetailRow('Interest Earned', 'LKR ${NumberFormat('#,##0.00').format(detail.interest)}', isHighlighted: true, color: const Color(0xFF4CAF50)),
+          _buildDetailRow('Maturity Amount', 'LKR ${NumberFormat('#,##0.00').format(detail.maturity)}', isHighlighted: true, color: const Color(0xFF42A5F5)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isHighlighted = false, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+        Text(value, style: TextStyle(color: color ?? Colors.white, fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
+      ]),
+    );
+  }
+
+  // ==================== HOW FD WORKS ====================
+
+  Widget _buildHowItWorks() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF42A5F5).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.lightbulb_outline, color: Color(0xFF42A5F5), size: 18)),
+            const SizedBox(width: 10),
+            const Text('How Fixed Deposits Work', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 16),
+          Text('A Fixed Deposit (FD) is a savings instrument offered by banks where you deposit a lump sum for a fixed period at a guaranteed interest rate. Your money grows safely, and you receive the principal plus interest at maturity.', style: TextStyle(color: Colors.white.withOpacity(0.65), fontSize: 13, height: 1.6)),
+          const SizedBox(height: 16),
+          _buildInfoStep('1', 'Choose Your Deposit', 'Decide how much to invest and for how long. Longer periods typically offer higher interest rates.'),
+          _buildInfoStep('2', 'Select a Bank', 'Compare rates across banks. In Sri Lanka, rates can vary significantly between institutions for the same period.'),
+          _buildInfoStep('3', 'Earn Guaranteed Returns', 'Your interest rate is locked for the entire period. Unlike stock market investments, FD returns are guaranteed.'),
+          _buildInfoStep('4', 'Receive Maturity Amount', 'At the end of the term, you receive your original deposit plus all earned interest. You can withdraw or reinvest.'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoStep(String number, String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(color: const Color(0xFF42A5F5).withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+          child: Center(child: Text(number, style: const TextStyle(color: Color(0xFF42A5F5), fontWeight: FontWeight.bold, fontSize: 13))),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text(description, style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 12, height: 1.4)),
+        ])),
+      ]),
+    );
+  }
+
+  // ==================== CALCULATION FORMULA ====================
+
+  Widget _buildCalculationFormula() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [const Color(0xFF42A5F5).withOpacity(0.1), const Color(0xFF42A5F5).withOpacity(0.03)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF42A5F5).withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.calculate, color: Color(0xFF42A5F5), size: 20),
+            const SizedBox(width: 8),
+            const Text('How We Calculate Returns', style: TextStyle(color: Color(0xFF42A5F5), fontSize: 17, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 16),
+          
+          // Formula card
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: const Color(0xFF0B0C10), borderRadius: BorderRadius.circular(12)),
+            child: Column(children: [
+              const Text('Simple Interest Formula', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Text(
+                'Interest = Principal × Rate × (Months / 12)',
+                style: TextStyle(color: const Color(0xFF42A5F5).withOpacity(0.9), fontSize: 14, fontWeight: FontWeight.w600, fontFamily: 'monospace'),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Maturity = Principal + Interest',
+                style: TextStyle(color: const Color(0xFF42A5F5).withOpacity(0.7), fontSize: 13, fontFamily: 'monospace'),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          
+          // Example
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: const Color(0xFF0B0C10), borderRadius: BorderRadius.circular(12)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Example:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12)),
+              const SizedBox(height: 6),
+              Text('Deposit: LKR 100,000', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+              Text('Rate: 10% p.a. for 1 Year', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+              const SizedBox(height: 4),
+              Text('Interest = 100,000 × 0.10 × (12/12) = LKR 10,000', style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 12, fontWeight: FontWeight.w600)),
+              Text('Maturity = 100,000 + 10,000 = LKR 110,000', style: const TextStyle(color: Color(0xFF42A5F5), fontSize: 12, fontWeight: FontWeight.w600)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==================== DISCLAIMER ====================
+
+  Widget _buildDisclaimer() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFA726).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFA726).withOpacity(0.15)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFA726), size: 20),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Important Notice', style: TextStyle(color: Color(0xFFFFA726), fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text(
+            'Interest rates shown are indicative and may vary based on the deposit amount, customer relationship, and prevailing market conditions. '
+            'Rates are updated periodically but may not reflect real-time changes. '
+            'Please contact your bank\'s branch manager or relationship officer for the most current rates, special promotions, and terms applicable to your specific deposit. '
+            'Past rates do not guarantee future returns. Fixed Deposits in Sri Lanka are insured up to Rs. 1,100,000 per depositor per bank under the Sri Lanka Deposit Insurance Scheme.',
+            style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11, height: 1.5),
+          ),
+        ])),
+      ]),
+    );
+  }
+}
+
+// ==================== BANK FD RESULT MODEL ====================
+
+class BankFDResult {
+  final String bankName;
+  final double rate;
+  final double interest;
+  final double maturity;
+  final int months;
+  final double effectiveAnnualRate;
+
+  BankFDResult({
+    required this.bankName,
+    required this.rate,
+    required this.interest,
+    required this.maturity,
+    required this.months,
+    required this.effectiveAnnualRate,
+  });
 }
 
 // ==================== LOAN CALCULATOR ====================

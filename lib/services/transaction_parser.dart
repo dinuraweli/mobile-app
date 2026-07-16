@@ -117,7 +117,7 @@ class TransactionParser {
 
     try {
       final model = GenerativeModel(
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.5-flash',
         apiKey: ApiConfig.geminiApiKey,
         systemInstruction: Content.system('''
 You are a Sri Lankan bank SMS transaction extractor. Your job is to extract financial transactions from bank alert messages.

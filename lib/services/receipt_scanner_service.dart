@@ -109,7 +109,7 @@ class ReceiptScannerService {
     }
 
     final model = GenerativeModel(
-      model: 'gemini-2.5-flash', // Use Flash for faster, cheaper vision
+      model: 'gemini-3.1-flash-lite', // Use Flash for faster, cheaper vision
       apiKey: ApiConfig.geminiApiKey,
       systemInstruction: Content.system('''
 You are a Sri Lankan receipt scanner. Extract purchase details from receipt images with HIGH accuracy.

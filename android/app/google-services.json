@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "863078141492",
+    "project_id": "sallimate",
+    "storage_bucket": "sallimate.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:863078141492:android:473c10d9b925e1f7ec8461",
+        "android_client_info": {
+          "package_name": "com.example.sallimate_prototype"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD2CPT-wce97JUlc1LpVA-cfJWDm2T_M3U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

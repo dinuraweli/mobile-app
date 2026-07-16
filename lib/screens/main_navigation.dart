@@ -70,6 +70,7 @@ class _MainNavigationState extends State<MainNavigation> {
 
   void _initSmsListener() async {
     bool? permissionsGranted = await telephony.requestPhoneAndSmsPermissions;
+    debugPrint('📱 SMS Permission: $permissionsGranted');
     if (permissionsGranted != null && permissionsGranted) {
       telephony.listenIncomingSms(
         onNewMessage: (SmsMessage message) {

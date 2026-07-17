@@ -178,10 +178,12 @@ class _MainNavigationState extends State<MainNavigation> {
             isListeningSms: true,
             onLogout: widget.onLogout,
           ),
-          InsightsScreen(transactions: _transactions),
+          InsightsScreen(transactions: _transactions,
+          userId: widget.currentUser.id,),
           const FinancialToolsScreen(),
           const LearningScreen(),
           const SalliBotScreen(),
+          
         ],
       ),
       bottomNavigationBar: FloatingNavBar(

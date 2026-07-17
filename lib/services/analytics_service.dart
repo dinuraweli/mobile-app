@@ -1,5 +1,5 @@
 // File: lib/services/analytics_service.dart
-import 'package:flutter/material.dart';  // ← ADD THIS
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import 'database_service.dart';
@@ -9,15 +9,15 @@ class AnalyticsService {
 
   // ==================== MONTHLY SUMMARIES ====================
 
-  Future<MonthlySummary> getMonthlySummary({int? month, int? year}) async {
+  Future<MonthlySummary> getMonthlySummary({required int userId, int? month, int? year}) async {
     month ??= DateTime.now().month;
     year ??= DateTime.now().year;
 
     final startDate = DateTime(year, month, 1);
     final endDate = DateTime(year, month + 1, 0, 23, 59, 59);
 
-    // FIXED: Use correct Isar query syntax
-    final allTransactions = await _db.getAllTransactions();
+    // Get only this user's transactions
+    final allTransactions = await _db.getTransactionsByUserId(userId);
     
     final transactions = allTransactions.where((t) {
       return t.createdAt.isAfter(startDate.subtract(const Duration(seconds: 1))) && 
@@ -31,6 +31,12 @@ class AnalyticsService {
     Map<String, double> vendorTotals = {};
     List<AppTransaction> subscriptions = [];
 
+    // Initialize all 7 days with 0 - always show Mon-Sun
+    const allDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    for (var day in allDays) {
+      dailyTotals[day] = 0.0;
+    }
+
     for (var t in transactions) {
       if (t.isCredit) {
         totalIncome += t.amount;
@@ -40,14 +46,15 @@ class AnalyticsService {
         vendorTotals[t.merchant] = (vendorTotals[t.merchant] ?? 0) + t.amount;
       }
 
-      final day = DateFormat('EEE').format(t.createdAt);
-      dailyTotals[day] = (dailyTotals[day] ?? 0) + (t.isDebit ? t.amount : 0);
+      final dayName = _getDayName(t.createdAt.weekday);
+      dailyTotals[dayName] = (dailyTotals[dayName] ?? 0) + (t.isDebit ? t.amount : 0);
 
       if (_isSubscription(t)) {
         subscriptions.add(t);
       }
     }
 
+    // Find highest and lowest spending days
     String? highestDay;
     String? lowestDay;
     double highestAmount = 0;
@@ -64,15 +71,11 @@ class AnalyticsService {
       }
     });
 
-    String? topVendor;
-    double topVendorAmount = 0;
-    vendorTotals.forEach((vendor, amount) {
-      if (amount > topVendorAmount) {
-        topVendorAmount = amount;
-        topVendor = vendor;
-      }
-    });
+    // Sort vendors by amount
+    var sortedVendors = vendorTotals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
+    // Category percentages
     Map<String, double> categoryPercentages = {};
     categoryTotals.forEach((cat, amount) {
       categoryPercentages[cat] = totalExpenses > 0 ? (amount / totalExpenses * 100) : 0;
@@ -92,9 +95,7 @@ class AnalyticsService {
       categoryPercentages: categoryPercentages,
       sortedCategories: sortedCategories,
       dailyTotals: dailyTotals,
-      vendorTotals: vendorTotals,
-      topVendor: topVendor,
-      topVendorAmount: topVendorAmount,
+      sortedVendors: sortedVendors,
       highestSpendingDay: highestDay,
       highestSpendingAmount: highestAmount,
       lowestSpendingDay: lowestDay,
@@ -104,9 +105,14 @@ class AnalyticsService {
     );
   }
 
+  String _getDayName(int weekday) {
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return days[weekday - 1];
+  }
+
   // ==================== SPENDING TRENDS ====================
 
-  Future<List<MonthlyTrend>> getMonthlyTrends({int months = 6}) async {
+  Future<List<MonthlyTrend>> getMonthlyTrends({required int userId, int months = 6}) async {
     List<MonthlyTrend> trends = [];
     final now = DateTime.now();
 
@@ -115,7 +121,7 @@ class AnalyticsService {
       final year = now.year + (month <= 0 ? -1 : 0);
       final adjustedMonth = month <= 0 ? month + 12 : month;
 
-      final summary = await getMonthlySummary(month: adjustedMonth, year: year);
+      final summary = await getMonthlySummary(userId: userId, month: adjustedMonth, year: year);
       trends.add(MonthlyTrend(
         month: DateFormat('MMM').format(DateTime(year, adjustedMonth)),
         totalExpenses: summary.totalExpenses,
@@ -126,15 +132,17 @@ class AnalyticsService {
     return trends;
   }
 
-  // ==================== RECURRING PAYMENTS ====================
+  // ==================== SUBSCRIPTIONS ====================
 
   bool _isSubscription(AppTransaction transaction) {
     final merchant = transaction.merchant.toLowerCase();
     final keywords = [
-      'netflix', 'spotify', 'amazon prime', 'youtube', 'apple',
-      'google', 'dialog', 'mobitel', 'slt', 'peo tv',
-      'zoom', 'canva', 'dropbox', 'microsoft', 'adobe',
-      'audible', 'disney', 'hbo', 'expressvpn',
+      'netflix', 'spotify', 'amazon prime', 'youtube premium',
+      'apple music', 'apple tv', 'google one', 'google drive',
+      'dialog postpaid', 'dialog tv', 'mobitel postpaid',
+      'slt fibre', 'peo tv', 'zoom pro', 'canva pro',
+      'dropbox', 'microsoft 365', 'adobe creative',
+      'audible', 'disney+', 'hbo max', 'expressvpn',
     ];
 
     if (keywords.any((k) => merchant.contains(k))) return true;
@@ -145,16 +153,13 @@ class AnalyticsService {
 
   // ==================== SPENDING PREDICTIONS ====================
 
-  Future<SpendingPrediction> predictMonthlySpending() async {
-    final trends = await getMonthlyTrends(months: 6);
+  Future<SpendingPrediction> predictMonthlySpending({required int userId}) async {
+    final trends = await getMonthlyTrends(userId: userId, months: 6);
     
     if (trends.isEmpty) {
-      // FIXED: Provide all required parameters
       return SpendingPrediction(
-        predictedAmount: 0, 
-        confidence: 0,
-        trend: 'stable',
-        message: 'Not enough data for predictions',
+        predictedAmount: 0, confidence: 0,
+        trend: 'stable', message: 'Not enough data',
         monthlyTrends: [],
       );
     }
@@ -171,7 +176,6 @@ class AnalyticsService {
 
     double slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
     double intercept = (sumY - slope * sumX) / n;
-
     double prediction = intercept + slope * n;
 
     double meanY = sumY / n;
@@ -186,13 +190,13 @@ class AnalyticsService {
     String message;
     String trend;
     if (slope > 500) {
-      message = 'Your spending is trending upward';
+      message = 'Spending is trending upward';
       trend = 'up';
     } else if (slope < -500) {
-      message = 'Great job! Your spending is decreasing';
+      message = 'Spending is decreasing - great job!';
       trend = 'down';
     } else {
-      message = 'Your spending is stable';
+      message = 'Spending is stable';
       trend = 'stable';
     }
 
@@ -207,63 +211,96 @@ class AnalyticsService {
 
   // ==================== SMART INSIGHTS ====================
 
-  Future<List<SmartInsight>> generateInsights() async {
+  Future<List<SmartInsight>> generateInsights({required int userId}) async {
     List<SmartInsight> insights = [];
-    final summary = await getMonthlySummary();
-    final prediction = await predictMonthlySpending();
-    final now = DateTime.now();
+    final summary = await getMonthlySummary(userId: userId);
+    final prediction = await predictMonthlySpending(userId: userId);
 
-    // Insight 1: Savings rate
     if (summary.totalIncome > 0) {
       double savingsRate = (summary.netSavings / summary.totalIncome) * 100;
       if (savingsRate >= 20) {
         insights.add(SmartInsight(
           icon: Icons.savings_rounded,
-          title: 'Excellent Savings Rate',
-          description: 'You saved ${savingsRate.toStringAsFixed(1)}% of your income this month!',
+          title: 'Excellent Savings',
+          description: 'You saved ${savingsRate.toStringAsFixed(0)}% of your income this month!',
           type: InsightType.positive,
         ));
-      } else if (savingsRate < 10) {
+      } else if (savingsRate < 10 && summary.totalIncome > 0) {
         insights.add(SmartInsight(
           icon: Icons.warning_rounded,
-          title: 'Low Savings Alert',
-          description: 'Only ${savingsRate.toStringAsFixed(1)}% saved. Aim for at least 20%.',
+          title: 'Low Savings Rate',
+          description: 'Only ${savingsRate.toStringAsFixed(0)}% saved. Try to save at least 20%.',
           type: InsightType.warning,
         ));
       }
     }
 
-    // Insight 2: Top spending category
     if (summary.sortedCategories.isNotEmpty) {
       var topCat = summary.sortedCategories.first;
       double pct = summary.categoryPercentages[topCat.key] ?? 0;
       if (pct > 40) {
+        String displayName = topCat.key == 'Recurring Payments' ? 'Subscriptions' : topCat.key;
         insights.add(SmartInsight(
           icon: Icons.pie_chart_rounded,
-          title: 'High ${topCat.key} Spending',
-          description: '${pct.toStringAsFixed(0)}% of expenses went to ${topCat.key}.',
+          title: 'Top Spending: $displayName',
+          description: '${pct.toStringAsFixed(0)}% of your expenses went to $displayName this month.',
           type: InsightType.warning,
         ));
       }
     }
 
-    // Insight 3: Spending trend
     insights.add(SmartInsight(
       icon: prediction.trend == 'up' ? Icons.trending_up : Icons.trending_down,
-      title: 'Spending Forecast',
-      description: '${prediction.message}. Predicted next month: LKR ${prediction.predictedAmount.toStringAsFixed(0)}',
+      title: 'Monthly Forecast',
+      description: prediction.message,
       type: prediction.trend == 'up' ? InsightType.warning : InsightType.positive,
     ));
 
-    // Insight 4: Subscriptions
-    final allTxns = await _db.getAllTransactions();
+    // Weekend vs weekday insight
+    double weekendSpend = 0;
+    double weekdaySpend = 0;
+    int weekendDays = 0;
+    int weekdayDays = 0;
+    final allTxns = await _db.getTransactionsByUserId(userId);
+    final now = DateTime.now();
+    final monthTxns = allTxns.where((t) =>
+      t.createdAt.month == now.month && t.createdAt.year == now.year && t.isDebit
+    ).toList();
+
+    for (var t in monthTxns) {
+      if (t.createdAt.weekday == 6 || t.createdAt.weekday == 7) {
+        weekendSpend += t.amount;
+        weekendDays++;
+      } else {
+        weekdaySpend += t.amount;
+        weekdayDays++;
+      }
+    }
+
+    double weekendAvg = weekendDays > 0 ? weekendSpend / weekendDays : 0;
+    double weekdayAvg = weekdayDays > 0 ? weekdaySpend / weekdayDays : 0;
+
+    if (weekendAvg > weekdayAvg * 1.3 && weekendDays > 0) {
+      insights.add(SmartInsight(
+        icon: Icons.weekend_rounded,
+        title: 'Weekend Spender',
+        description: 'You spend ${((weekendAvg / weekdayAvg - 1) * 100).toStringAsFixed(0)}% more on weekends.',
+        type: InsightType.info,
+      ));
+    }
+
+    // Subscription insight
     final recurringTxs = allTxns.where((t) => t.isDebit && _isSubscription(t)).toList();
     if (recurringTxs.isNotEmpty) {
-      double monthlySubs = recurringTxs.fold(0.0, (sum, t) => sum + t.amount);
+      final uniqueSubs = <String, double>{};
+      for (var t in recurringTxs) {
+        uniqueSubs[t.merchant] = t.amount;
+      }
+      double monthlySubs = uniqueSubs.values.fold(0.0, (sum, v) => sum + v);
       insights.add(SmartInsight(
-        icon: Icons.repeat_rounded,
-        title: 'Recurring Payments',
-        description: 'You have ${recurringTxs.length} recurring payments (LKR ${monthlySubs.toStringAsFixed(0)}/mo)',
+        icon: Icons.subscriptions_rounded,
+        title: 'Active Subscriptions',
+        description: '${uniqueSubs.length} subscriptions totaling LKR ${NumberFormat('#,##0').format(monthlySubs)}/mo',
         type: InsightType.info,
       ));
     }
@@ -285,9 +322,7 @@ class MonthlySummary {
   final Map<String, double> categoryPercentages;
   final List<MapEntry<String, double>> sortedCategories;
   final Map<String, double> dailyTotals;
-  final Map<String, double> vendorTotals;
-  final String? topVendor;
-  final double topVendorAmount;
+  final List<MapEntry<String, double>> sortedVendors;
   final String? highestSpendingDay;
   final double highestSpendingAmount;
   final String? lowestSpendingDay;
@@ -306,9 +341,7 @@ class MonthlySummary {
     required this.categoryPercentages,
     required this.sortedCategories,
     required this.dailyTotals,
-    required this.vendorTotals,
-    this.topVendor,
-    required this.topVendorAmount,
+    required this.sortedVendors,
     this.highestSpendingDay,
     required this.highestSpendingAmount,
     this.lowestSpendingDay,
@@ -322,12 +355,7 @@ class MonthlyTrend {
   final String month;
   final double totalExpenses;
   final double totalIncome;
-
-  MonthlyTrend({
-    required this.month,
-    required this.totalExpenses,
-    required this.totalIncome,
-  });
+  MonthlyTrend({required this.month, required this.totalExpenses, required this.totalIncome});
 }
 
 class SpendingPrediction {
@@ -336,14 +364,7 @@ class SpendingPrediction {
   final String trend;
   final String message;
   final List<MonthlyTrend> monthlyTrends;
-
-  SpendingPrediction({
-    required this.predictedAmount,
-    required this.confidence,
-    required this.trend,
-    required this.message,
-    required this.monthlyTrends,
-  });
+  SpendingPrediction({required this.predictedAmount, required this.confidence, required this.trend, required this.message, required this.monthlyTrends});
 }
 
 class SmartInsight {
@@ -351,13 +372,7 @@ class SmartInsight {
   final String title;
   final String description;
   final InsightType type;
-
-  SmartInsight({
-    required this.icon,
-    required this.title,
-    required this.description,
-    required this.type,
-  });
+  SmartInsight({required this.icon, required this.title, required this.description, required this.type});
 }
 
 enum InsightType { positive, warning, info }

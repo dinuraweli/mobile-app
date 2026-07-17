@@ -132,7 +132,6 @@ class FinancialConfigService {
         final lastFetchStatus = _remoteConfig!.lastFetchStatus;
         
         if (lastFetchStatus == RemoteConfigFetchStatus.success &&
-            lastFetch != null &&
             DateTime.now().difference(lastFetch).inHours < 6) {
           debugPrint('⏭️ Skipping fetch - last fetch was ${DateTime.now().difference(lastFetch).inMinutes}m ago');
         } else {

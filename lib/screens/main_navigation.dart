@@ -69,23 +69,20 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   void _initSmsListener() async {
-    bool? permissionsGranted = await telephony.requestPhoneAndSmsPermissions;
-    debugPrint('📱 SMS Permission: $permissionsGranted');
-    if (permissionsGranted != null && permissionsGranted) {
-      telephony.listenIncomingSms(
-        onNewMessage: (SmsMessage message) {
-          String sender = message.address ?? '';
-          String body = message.body ?? '';
-
-          if (SmsValidator.isBankTransaction(sender, body)) {
-            _processTransactionSMS(body);
-          }
-        },
-        listenInBackground: false,
-      );
-    }
+  bool? permissionsGranted = await telephony.requestPhoneAndSmsPermissions;
+  if (permissionsGranted != null && permissionsGranted) {
+    telephony.listenIncomingSms(
+      onNewMessage: (SmsMessage message) {
+        String sender = message.address ?? '';
+        String body = message.body ?? '';
+        if (SmsValidator.isBankTransaction(sender, body)) {
+          _processTransactionSMS(body, sender: sender);
+        }
+      },
+      listenInBackground: false,
+    );
   }
-
+}
   Future<void> _checkPendingSms() async {
     if (!Hive.isBoxOpen('pending_sms')) {
       await Hive.openBox<String>('pending_sms');
@@ -105,8 +102,8 @@ class _MainNavigationState extends State<MainNavigation> {
     await box.clear();
   }
 
-  Future<void> _processTransactionSMS(String smsBody) async {
-    final transaction = await TransactionParser.parse(smsBody, userId: widget.currentUser.id);
+  Future<void> _processTransactionSMS(String smsBody, {String? sender}) async {
+  final transaction = await TransactionParser.parse(smsBody, userId: widget.currentUser.id, sender: sender);
 
     if (transaction != null && transaction.amount > 0) {
       _handleNewTransaction(transaction);

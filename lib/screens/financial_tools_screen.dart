@@ -1522,7 +1522,7 @@ class BankFDResult {
   });
 }
 
-// ==================== LOAN CALCULATOR ====================
+// ==================== ENHANCED LOAN CALCULATOR ====================
 
 class LoanCalculatorScreen extends StatefulWidget {
   const LoanCalculatorScreen({super.key});
@@ -1533,115 +1533,566 @@ class LoanCalculatorScreen extends StatefulWidget {
 
 class _LoanCalculatorScreenState extends State<LoanCalculatorScreen> {
   final _amountController = TextEditingController();
-  final _rateController = TextEditingController(text: '13');
-  final _tenureController = TextEditingController(text: '36');
+  final _lumpSumController = TextEditingController(text: '0');
+  final _recurringLumpSumController = TextEditingController(text: '0');
+  
+  String _selectedLoanType = 'Personal Loan';
   String _selectedBank = 'Commercial Bank';
-  String _result = '';
-  bool _calculated = false;
+  int _selectedTenure = 36;
+  double _interestRate = 0.12;
+  
+  // Results
+  double _monthlyEMI = 0;
+  double _totalPayment = 0;
+  double _totalInterest = 0;
+  List<AmortizationEntry> _schedule = [];
+  Map<String, BankLoanResult> _bankResults = {};
+  String? _bestBank;
+  
+  bool _isCalculated = false;
+  bool _showSchedule = false;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _lumpSumController.dispose();
+    _recurringLumpSumController.dispose();
+    super.dispose();
+  }
+
+  void _onLoanTypeChanged(String? type) {
+    if (type != null) {
+      setState(() {
+        _selectedLoanType = type;
+        // Update rate from selected bank for this loan type
+        final loanType = SLFinancialData.loanTypes.firstWhere((lt) => lt.name == type);
+        _interestRate = loanType.typicalRates[_selectedBank] ?? loanType.minRate;
+        // Reset tenure if exceeds max
+        final maxTenure = loanType.maxTenure;
+        if (_selectedTenure > maxTenure) {
+          _selectedTenure = maxTenure;
+        }
+      });
+    }
+  }
+
+  void _onBankChanged(String? bank) {
+    if (bank != null) {
+      setState(() {
+        _selectedBank = bank;
+        final loanType = SLFinancialData.loanTypes.firstWhere((lt) => lt.name == _selectedLoanType);
+        _interestRate = loanType.typicalRates[bank] ?? loanType.minRate;
+      });
+    }
+  }
 
   void _calculate() {
     double amount = double.tryParse(_amountController.text) ?? 0;
-    double rate = (double.tryParse(_rateController.text) ?? 13) / 100;
-    int tenure = int.tryParse(_tenureController.text) ?? 36;
-    
-    if (amount <= 0) return;
+    if (amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid loan amount'), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
 
-    double monthlyRate = rate / 12;
-    double monthlyFactor = math.pow(1 + monthlyRate, tenure).toDouble();
-    double emi = amount * monthlyRate * monthlyFactor / (monthlyFactor - 1);
-    double totalPayment = emi * tenure;
-    double totalInterest = totalPayment - amount;
+    double lumpSum = double.tryParse(_lumpSumController.text) ?? 0;
+    double recurringLumpSum = double.tryParse(_recurringLumpSumController.text) ?? 0;
+    double monthlyRate = _interestRate / 12;
+
+    // Calculate EMI with optional recurring lump sum
+    double effectiveLoan = amount - lumpSum;
+    double monthlyFactor = math.pow(1 + monthlyRate, _selectedTenure).toDouble();
+    _monthlyEMI = effectiveLoan > 0 
+        ? effectiveLoan * monthlyRate * monthlyFactor / (monthlyFactor - 1) 
+        : 0;
+
+    // Add recurring lump sum to monthly payment
+    double totalMonthly = _monthlyEMI + recurringLumpSum;
+
+    // Generate amortization schedule
+    _schedule = [];
+    double balance = effectiveLoan;
+    for (int i = 1; i <= _selectedTenure && balance > 0; i++) {
+      double interestPayment = balance * monthlyRate;
+      double principalPayment = totalMonthly - interestPayment;
+      if (principalPayment > balance) {
+        principalPayment = balance;
+        totalMonthly = principalPayment + interestPayment;
+      }
+      balance -= principalPayment;
+      _schedule.add(AmortizationEntry(
+        month: i,
+        emi: totalMonthly,
+        principal: principalPayment,
+        interest: interestPayment,
+        balance: balance.clamp(0, double.infinity),
+      ));
+    }
+
+    _totalPayment = _schedule.fold(0.0, (sum, e) => sum + e.emi) + lumpSum;
+    _totalInterest = _schedule.fold(0.0, (sum, e) => sum + e.interest);
+
+    // Compare banks
+    _bankResults = {};
+    double bestEMI = double.infinity;
+    _bestBank = null;
+    final loanType = SLFinancialData.loanTypes.firstWhere((lt) => lt.name == _selectedLoanType);
+    
+    for (var bank in loanType.typicalRates.keys) {
+      double rate = loanType.typicalRates[bank] ?? 0.12;
+      double bMonthlyRate = rate / 12;
+      double bFactor = math.pow(1 + bMonthlyRate, _selectedTenure).toDouble();
+      double bEMI = effectiveLoan > 0 
+          ? effectiveLoan * bMonthlyRate * bFactor / (bFactor - 1) 
+          : 0;
+      double bTotal = bEMI * _selectedTenure + lumpSum;
+      double bInterest = bTotal - effectiveLoan;
+      
+      _bankResults[bank] = BankLoanResult(
+        bankName: bank,
+        rate: rate,
+        emi: bEMI + recurringLumpSum,
+        totalPayment: bTotal + (recurringLumpSum * _selectedTenure),
+        totalInterest: bInterest,
+      );
+      
+      if (bEMI < bestEMI) {
+        bestEMI = bEMI;
+        _bestBank = bank;
+      }
+    }
 
     setState(() {
-      _result = '''
-Loan Amount: LKR ${NumberFormat('#,##0.00').format(amount)}
-Interest Rate: ${(rate * 100).toStringAsFixed(1)}% p.a.
-Tenure: $tenure months (${(tenure / 12).toStringAsFixed(1)} years)
-
-Monthly EMI: LKR ${NumberFormat('#,##0.00').format(emi)}
-Total Payment: LKR ${NumberFormat('#,##0.00').format(totalPayment)}
-Total Interest: LKR ${NumberFormat('#,##0.00').format(totalInterest)}
-''';
-      _calculated = true;
+      _isCalculated = true;
+      _showSchedule = false;
     });
+  }
+
+  IconData _getLoanIcon(String type) {
+    switch (type) {
+      case 'Housing Loan': return Icons.home_rounded;
+      case 'Vehicle Loan': return Icons.directions_car_rounded;
+      case 'Education Loan': return Icons.school_rounded;
+      case 'Solar Loan': return Icons.solar_power_rounded;
+      case 'Business Loan': return Icons.business_rounded;
+      default: return Icons.person_rounded;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentLoanType = SLFinancialData.loanTypes.firstWhere((lt) => lt.name == _selectedLoanType);
+    final filteredTenures = SLFinancialData.loanTenureOptions
+        .where((t) => t <= currentLoanType.maxTenure)
+        .toList();
+
     return Scaffold(
       backgroundColor: const Color(0xFF0B0C10),
-      appBar: AppBar(title: const Text('Loan Calculator'), backgroundColor: const Color(0xFF1A1A2E)),
+      appBar: AppBar(
+        title: const Text('Loan Calculator'),
+        backgroundColor: const Color(0xFF1A1A2E),
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            DropdownButtonFormField<String>(
-              initialValue: _selectedBank,
-              dropdownColor: const Color(0xFF1A1A2E),
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Bank (for reference rate)',
-                filled: true,
-                fillColor: const Color(0xFF1A1A2E),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-              ),
-              items: SLFinancialData.personalLoanRates.keys.map((b) {
-                return DropdownMenuItem(
-                  value: b,
-                  child: Text('$b (${(SLFinancialData.personalLoanRates[b]! * 100).toStringAsFixed(1)}%)'),
-                );
-              }).toList(),
-              onChanged: (val) {
-                setState(() {
-                  _selectedBank = val!;
-                  _rateController.text = (SLFinancialData.personalLoanRates[val]! * 100).toStringAsFixed(1);
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            _buildInput('Loan Amount (LKR)', _amountController),
-            const SizedBox(height: 16),
-            _buildInput('Interest Rate (% p.a.)', _rateController),
-            const SizedBox(height: 16),
-            _buildInput('Tenure (months)', _tenureController),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _calculate,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF66FCF1),
-                foregroundColor: const Color(0xFF0B0C10),
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: const Text('Calculate EMI', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-            if (_calculated) ...[
+            // Input Section
+            _buildInputSection(currentLoanType, filteredTenures),
+            const SizedBox(height: 24),
+            _buildCalculateButton(),
+
+            if (_isCalculated) ...[
+              const SizedBox(height: 28),
+              _buildResultsCards(),
               const SizedBox(height: 24),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16)),
-                child: Text(_result, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.6)),
-              ),
+              _buildPaymentChart(),
+              const SizedBox(height: 24),
+              _buildBankComparison(),
+              const SizedBox(height: 24),
+              _buildAmortizationSection(),
+              const SizedBox(height: 24),
+              _buildHowItWorks(),
+              const SizedBox(height: 24),
+              _buildDisclaimer(),
             ],
-            const SizedBox(height: 100),
+            const SizedBox(height: 120),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInput(String label, TextEditingController controller) {
+  Widget _buildInputSection(LoanType loanType, List<int> tenures) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFFAB47BC).withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.monetization_on_rounded, color: Color(0xFFAB47BC), size: 22)),
+          const SizedBox(width: 12),
+          const Text('Loan Details', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 20),
+
+        // Loan Type Chips
+        const Text('Loan Type:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: SLFinancialData.loanTypes.map((type) {
+          bool isSelected = _selectedLoanType == type.name;
+          return ChoiceChip(
+            label: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(_getLoanIcon(type.name), size: 16, color: isSelected ? Colors.white : Colors.white60),
+              const SizedBox(width: 6),
+              Text(type.name, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.white70)),
+            ]),
+            selected: isSelected,
+            onSelected: (_) => _onLoanTypeChanged(type.name),
+            selectedColor: const Color(0xFFAB47BC),
+            backgroundColor: const Color(0xFF0B0C10),
+            side: BorderSide(color: isSelected ? const Color(0xFFAB47BC) : Colors.white.withOpacity(0.1)),
+          );
+        }).toList()),
+        const SizedBox(height: 8),
+        Text(loanType.description, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+        const SizedBox(height: 16),
+
+        // Bank
+        _buildDropdown('Bank', _selectedBank, SLFinancialData.loanBanks, _onBankChanged),
+        const SizedBox(height: 14),
+
+        // Amount
+        _buildTextField('Loan Amount (LKR)', _amountController, hint: 'e.g., 1,000,000'),
+        const SizedBox(height: 14),
+
+        // Interest Rate Display
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFFAB47BC).withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Interest Rate ($_selectedBank)', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+            Text('${(_interestRate * 100).toStringAsFixed(1)}% p.a.', style: const TextStyle(color: Color(0xFFAB47BC), fontWeight: FontWeight.bold, fontSize: 14)),
+          ]),
+        ),
+        const SizedBox(height: 14),
+
+        // Tenure
+        const Text('Tenure:', style: TextStyle(color: Colors.white70, fontSize: 13)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, children: tenures.map((t) {
+          bool isSelected = _selectedTenure == t;
+          String label = t >= 12 ? '${t ~/ 12}Y' : '${t}M';
+          return ChoiceChip(
+            label: Text(label, style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : Colors.white70)),
+            selected: isSelected,
+            onSelected: (_) => setState(() => _selectedTenure = t),
+            selectedColor: const Color(0xFFAB47BC),
+            backgroundColor: const Color(0xFF0B0C10),
+            side: BorderSide(color: isSelected ? const Color(0xFFAB47BC) : Colors.white.withOpacity(0.1)),
+          );
+        }).toList()),
+        const SizedBox(height: 14),
+
+        // Lump Sum
+        _buildTextField('Initial Lump Sum Payment (LKR)', _lumpSumController, hint: 'Optional'),
+        const SizedBox(height: 14),
+        _buildTextField('Additional Monthly Payment (LKR)', _recurringLumpSumController, hint: 'Optional - reduces tenure'),
+      ]),
+    );
+  }
+
+  Widget _buildDropdown(String label, String value, List<String> items, Function(String?) onChanged) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      dropdownColor: const Color(0xFF1A1A2E),
+      style: const TextStyle(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(labelText: label, labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)), filled: true, fillColor: const Color(0xFF0B0C10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none)),
+      items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildTextField(String label, TextEditingController controller, {String? hint}) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: const Color(0xFF1A1A2E),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      style: const TextStyle(color: Colors.white, fontSize: 16),
+      decoration: InputDecoration(labelText: label, hintText: hint, hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)), labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)), filled: true, fillColor: const Color(0xFF0B0C10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none), focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFAB47BC), width: 1)), prefixIcon: const Icon(Icons.money_outlined, color: Color(0xFFAB47BC), size: 20)),
+    );
+  }
+
+  Widget _buildCalculateButton() {
+    return ElevatedButton(
+      onPressed: _calculate,
+      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFAB47BC), foregroundColor: Colors.white, minimumSize: const Size(double.infinity, 56), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 0),
+      child: const Text('Calculate Loan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  // ==================== RESULTS ====================
+
+  Widget _buildResultsCards() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Loan Summary', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 12),
+      Row(children: [
+        _buildResultCard('Monthly EMI', 'LKR ${NumberFormat('#,##0').format(_monthlyEMI + (double.tryParse(_recurringLumpSumController.text) ?? 0))}', const Color(0xFFAB47BC), Icons.payments),
+        const SizedBox(width: 12),
+        _buildResultCard('Total Interest', 'LKR ${NumberFormat('#,##0').format(_totalInterest)}', const Color(0xFFEF5350), Icons.trending_up),
+      ]),
+      const SizedBox(height: 12),
+      Row(children: [
+        _buildResultCard('Total Payment', 'LKR ${NumberFormat('#,##0').format(_totalPayment)}', const Color(0xFFFFA726), Icons.receipt_long),
+        const SizedBox(width: 12),
+        _buildResultCard('Best Bank', _bestBank ?? 'N/A', const Color(0xFF4CAF50), Icons.star),
+      ]),
+    ]);
+  }
+
+  Widget _buildResultCard(String label, String value, Color color, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 16)),
+          const SizedBox(height: 12),
+          Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
+        ]),
       ),
     );
   }
+
+  // ==================== PAYMENT CHART ====================
+
+  Widget _buildPaymentChart() {
+    double principal = _totalPayment - _totalInterest;
+    double totalWithDown = principal + _totalInterest + (double.tryParse(_lumpSumController.text) ?? 0);
+    double principalPct = totalWithDown > 0 ? (principal / totalWithDown) * 100 : 0;
+    double interestPct = totalWithDown > 0 ? (_totalInterest / totalWithDown) * 100 : 0;
+    double lumpPct = totalWithDown > 0 ? ((double.tryParse(_lumpSumController.text) ?? 0) / totalWithDown) * 100 : 0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Payment Breakdown', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 20),
+        ClipRRect(borderRadius: BorderRadius.circular(10), child: SizedBox(height: 32, child: Row(children: [
+          if (lumpPct > 0) Expanded(flex: lumpPct.round().clamp(1, 100), child: Container(color: const Color(0xFF42A5F5))),
+          if (principalPct > 0) Expanded(flex: principalPct.round().clamp(1, 100), child: Container(color: const Color(0xFF4CAF50))),
+          if (interestPct > 0) Expanded(flex: interestPct.round().clamp(1, 100), child: Container(color: const Color(0xFFEF5350))),
+        ]))),
+        const SizedBox(height: 16),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+          _buildLegend('Lump Sum', const Color(0xFF42A5F5), double.tryParse(_lumpSumController.text) ?? 0, '${lumpPct.toStringAsFixed(1)}%'),
+          _buildLegend('Principal', const Color(0xFF4CAF50), principal, '${principalPct.toStringAsFixed(1)}%'),
+          _buildLegend('Interest', const Color(0xFFEF5350), _totalInterest, '${interestPct.toStringAsFixed(1)}%'),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _buildLegend(String label, Color color, double amount, String pct) {
+    return Column(children: [
+      Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 10, height: 10, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))), const SizedBox(width: 6), Text(label, style: const TextStyle(color: Colors.white, fontSize: 11))]),
+      const SizedBox(height: 2),
+      Text('LKR ${NumberFormat.compact().format(amount)} ($pct)', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
+    ]);
+  }
+
+  // ==================== BANK COMPARISON ====================
+
+  Widget _buildBankComparison() {
+    if (_bankResults.isEmpty) return const SizedBox();
+    var sorted = _bankResults.entries.toList()..sort((a, b) => a.value.emi.compareTo(b.value.emi));
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Bank Comparison (Lowest EMI First)', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        ...sorted.map((entry) {
+          bool isBest = entry.key == _bestBank;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: isBest ? const Color(0xFF4CAF50).withOpacity(0.05) : const Color(0xFF0B0C10), borderRadius: BorderRadius.circular(12), border: Border.all(color: isBest ? const Color(0xFF4CAF50).withOpacity(0.3) : Colors.white.withOpacity(0.05))),
+            child: Row(children: [
+              if (isBest) const Padding(padding: EdgeInsets.only(right: 8), child: Icon(Icons.star, color: Color(0xFFFFD700), size: 18)),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(entry.key, style: TextStyle(color: isBest ? const Color(0xFFFFD700) : Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                Text('${(entry.value.rate * 100).toStringAsFixed(1)}% p.a.', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+              ])),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('LKR ${NumberFormat('#,##0').format(entry.value.emi)}/mo', style: TextStyle(color: isBest ? const Color(0xFF4CAF50) : const Color(0xFFAB47BC), fontWeight: FontWeight.bold, fontSize: 13)),
+                Text('Total: LKR ${NumberFormat('#,##0').format(entry.value.totalPayment)}', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10)),
+              ]),
+            ]),
+          );
+        }),
+      ]),
+    );
+  }
+
+  // ==================== AMORTIZATION SCHEDULE ====================
+
+  Widget _buildAmortizationSection() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        const Text('Payment Schedule', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        TextButton.icon(
+          icon: Icon(_showSchedule ? Icons.expand_less : Icons.expand_more, color: const Color(0xFFAB47BC)),
+          label: Text(_showSchedule ? 'Hide' : 'Show Full Schedule', style: const TextStyle(color: Color(0xFFAB47BC))),
+          onPressed: () => setState(() => _showSchedule = !_showSchedule),
+        ),
+      ]),
+      if (_showSchedule) ...[
+        const SizedBox(height: 8),
+        // Chart
+        SizedBox(
+          height: 120,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            ...List.generate(_schedule.length.clamp(0, 24), (i) {
+              if (i % (_schedule.length ~/ 12).clamp(1, 100) != 0 && i != 0 && i != _schedule.length - 1) return const SizedBox.shrink();
+              double maxVal = _schedule.map((e) => e.emi).reduce((a, b) => a > b ? a : b);
+              double pct = maxVal > 0 ? _schedule[i].emi / maxVal : 0;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    Container(height: 90 * pct, decoration: BoxDecoration(color: const Color(0xFFAB47BC).withOpacity(0.6), borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))),
+                    const SizedBox(height: 4),
+                    Text('${_schedule[i].month}', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 7)),
+                  ]),
+                ),
+              );
+            }),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        // Schedule table header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: const Color(0xFFAB47BC).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+          child: Row(children: [
+  SizedBox(width: 35, child: Text('#', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11, fontWeight: FontWeight.w600))),
+  Expanded(flex: 2, child: Text('Principal', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11, fontWeight: FontWeight.w600))),
+  Expanded(flex: 2, child: Text('Interest', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11, fontWeight: FontWeight.w600))),
+  Expanded(flex: 2, child: Text('Balance', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11, fontWeight: FontWeight.w600))),
+]),
+        ),
+        // Schedule rows
+        ..._schedule.take(24).map((e) => Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.03)))),
+          child: Row(children: [
+            SizedBox(width: 35, child: Text('${e.month}', style: const TextStyle(color: Colors.white54, fontSize: 11))),
+            Expanded(flex: 2, child: Text(NumberFormat.compact().format(e.principal), style: const TextStyle(color: Color(0xFF4CAF50), fontSize: 11))),
+            Expanded(flex: 2, child: Text(NumberFormat.compact().format(e.interest), style: const TextStyle(color: Color(0xFFEF5350), fontSize: 11))),
+            Expanded(flex: 2, child: Text(NumberFormat.compact().format(e.balance), style: const TextStyle(color: Colors.white54, fontSize: 11))),
+          ]),
+        )),
+        if (_schedule.length > 24)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text('+ ${_schedule.length - 24} more payments...', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 11)),
+          ),
+      ],
+      const SizedBox(height: 12),
+      // Quick stats
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: const Color(0xFFAB47BC).withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+          _buildMiniStat('Total Payments', '${_schedule.length}'),
+          _buildMiniStat('Avg Monthly', 'LKR ${NumberFormat.compact().format(_totalPayment / _schedule.length)}'),
+          _buildMiniStat('Interest Share', '${(_totalInterest / _totalPayment * 100).toStringAsFixed(1)}%'),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _buildMiniStat(String label, String value) {
+    return Column(children: [
+      Text(value, style: const TextStyle(color: Color(0xFFAB47BC), fontWeight: FontWeight.bold, fontSize: 14)),
+      Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10)),
+    ]);
+  }
+
+  // ==================== HOW IT WORKS ====================
+
+  Widget _buildHowItWorks() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFFAB47BC).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.info_outline, color: Color(0xFFAB47BC), size: 18)),
+          const SizedBox(width: 10),
+          const Text('Understanding Your Loan', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 16),
+        _buildInfoPoint('EMI', 'Equated Monthly Installment - your fixed monthly payment covering both principal and interest.'),
+        _buildInfoPoint('Principal', 'The original loan amount you borrow. Each EMI payment reduces the outstanding principal.'),
+        _buildInfoPoint('Interest', 'Calculated monthly on the reducing balance. Early payments have higher interest components.'),
+        _buildInfoPoint('Lump Sum', 'An optional upfront payment that reduces the loan amount and your monthly EMI.'),
+        _buildInfoPoint('Recurring Extra', 'Additional monthly payments that reduce your loan tenure and total interest paid.'),
+      ]),
+    );
+  }
+
+  Widget _buildInfoPoint(String title, String description) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(margin: const EdgeInsets.only(top: 4), width: 6, height: 6, decoration: const BoxDecoration(color: Color(0xFFAB47BC), shape: BoxShape.circle)),
+        const SizedBox(width: 10),
+        Expanded(child: RichText(text: TextSpan(children: [
+          TextSpan(text: '$title: ', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+          TextSpan(text: description, style: TextStyle(color: Colors.white.withOpacity(0.65), fontSize: 13, height: 1.5)),
+        ]))),
+      ]),
+    );
+  }
+
+  // ==================== DISCLAIMER ====================
+
+  Widget _buildDisclaimer() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: const Color(0xFFFFA726).withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFFA726).withOpacity(0.15))),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFA726), size: 20),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Disclaimer', style: TextStyle(color: Color(0xFFFFA726), fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(height: 4),
+          Text('Interest rates are indicative and subject to change. Actual rates depend on your credit score, income, relationship with the bank, and prevailing market conditions. This calculator provides estimates only. Please contact the respective bank for exact rates, processing fees, and terms applicable to your profile.', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11, height: 1.5)),
+        ])),
+      ]),
+    );
+  }
+}
+
+// ==================== BANK LOAN RESULT ====================
+
+class BankLoanResult {
+  final String bankName;
+  final double rate;
+  final double emi;
+  final double totalPayment;
+  final double totalInterest;
+
+  BankLoanResult({
+    required this.bankName,
+    required this.rate,
+    required this.emi,
+    required this.totalPayment,
+    required this.totalInterest,
+  });
 }

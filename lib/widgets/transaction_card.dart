@@ -95,8 +95,10 @@ class TransactionCard extends StatelessWidget {
             ElevatedButton(
               onPressed: () {
                 double newAmt = double.tryParse(amtCtrl.text) ?? transaction.amount;
-                AppTransaction updated = AppTransaction.create(
-                  userId: transaction.userId,
+                AppTransaction updated = AppTransaction(
+                  id: transaction.id,
+                  transactionId: transaction.transactionId,
+                  userId: transaction.userId,  // ← ADD THIS
                   bank: transaction.bank,
                   bankName: transaction.bankName,
                   amount: newAmt,
@@ -107,7 +109,10 @@ class TransactionCard extends StatelessWidget {
                   accountType: transaction.accountType,
                   accountMask: transaction.accountMask,
                   availableBalance: transaction.availableBalance,
+                  createdAt: transaction.createdAt,
                   source: transaction.source,
+                  smsRawText: transaction.smsRawText,
+                  aiConfidence: transaction.aiConfidence,
                 );
                 onEdit(transaction, updated);
                 Navigator.pop(context);

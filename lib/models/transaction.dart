@@ -105,6 +105,7 @@ class AppTransaction {
     String source = 'manual',
     String? smsRawText,
     double? aiConfidence,
+    DateTime? createdAt,
   }) {
     return AppTransaction(
       transactionId: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -119,7 +120,7 @@ class AppTransaction {
       accountType: accountType,
       accountMask: accountMask,
       availableBalance: availableBalance,
-      createdAt: DateTime.now(),
+      createdAt: createdAt ?? DateTime.now(),
       source: source,
       smsRawText: smsRawText,
       aiConfidence: aiConfidence,

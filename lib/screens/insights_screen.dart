@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/transaction.dart';
 import '../services/analytics_service.dart';
+import '../widgets/spending_bar_chart.dart';
 
 class InsightsScreen extends StatefulWidget {
   final List<AppTransaction> transactions;
@@ -32,6 +33,62 @@ class _InsightsScreenState extends State<InsightsScreen> {
     _selectedMonth = DateFormat('MMM').format(DateTime.now());
     _loadData();
   }
+
+  // Add this inside _InsightsScreenState class:
+
+Widget _buildDailySpendingChart() {
+  if (_summary == null || _summary!.dailyTotals.isEmpty) return const SizedBox();
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Daily Spending',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF66FCF1).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'This Month',
+                style: TextStyle(
+                  color: const Color(0xFF66FCF1).withOpacity(0.7),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A2E),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.05)),
+          ),
+          child: SpendingBarChart(
+            dailySpending: _summary!.dailyTotals,
+            barColor: const Color(0xFF66FCF1),
+          ),
+        ),
+      ],
+    ),
+  );
+}
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
@@ -96,6 +153,10 @@ class _InsightsScreenState extends State<InsightsScreen> {
                   // Spending Trend Chart
                   if (_prediction != null)
                     SliverToBoxAdapter(child: _buildTrendChart()),
+
+                    // ADD THIS RIGHT AFTER:
+if (_summary != null && _summary!.dailyTotals.isNotEmpty)
+  SliverToBoxAdapter(child: _buildDailySpendingChart()),
                   
                   // Category Breakdown
                   if (_summary != null)

@@ -79,8 +79,9 @@ class SpendingBarChart extends StatelessWidget {
     if (max <= 0) return [0, 250, 500, 750, 1000];
     double step = max / 4;
     double mag = 1;
-    if (step >= 10000) mag = 5000;
-    else if (step >= 5000) mag = 1000;
+    if (step >= 10000) {
+      mag = 5000;
+    } else if (step >= 5000) mag = 1000;
     else if (step >= 1000) mag = 500;
     else if (step >= 500) mag = 100;
     else if (step >= 100) mag = 50;

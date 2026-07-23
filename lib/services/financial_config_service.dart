@@ -184,4 +184,53 @@ class FinancialConfigService {
     _currentConfig = null;
     debugPrint('🧹 Config cache cleared');
   }
+
+  // ==================== EXCHANGE RATES ====================
+
+/// Get exchange rates from Firebase Remote Config or cache
+Future<Map<String, dynamic>?> getExchangeRates() async {
+  try {
+    // Force fetch fresh data from Firebase
+    if (_remoteConfig != null) {
+      debugPrint('🔄 Fetching exchange rates from Firebase...');
+      await _remoteConfig!.fetchAndActivate();
+      
+      final jsonStr = _remoteConfig!.getString('exchange_rates_json');
+      debugPrint('📩 Exchange rates raw: ${jsonStr.substring(0, jsonStr.length > 50 ? 50 : jsonStr.length)}...');
+      
+      if (jsonStr.isNotEmpty && jsonStr != '{}') {
+        final data = jsonDecode(jsonStr);
+        await _prefs?.setString('exchange_rates_cache', jsonStr);
+        await _prefs?.setString('exchange_rates_updated', data['updated_at'] ?? DateTime.now().toIso8601String());
+        debugPrint('☁️ Exchange rates fetched from remote (v${data['version']})');
+        return data;
+      } else {
+        debugPrint('⚠️ exchange_rates_json is empty or not found in Firebase');
+      }
+    } else {
+      debugPrint('⚠️ Remote config not initialized');
+    }
+    
+    // Try cache
+    final cached = _prefs?.getString('exchange_rates_cache');
+    if (cached != null && cached.isNotEmpty) {
+      debugPrint('📦 Exchange rates loaded from cache');
+      return jsonDecode(cached);
+    }
+    
+    debugPrint('⚠️ No exchange rates available');
+    return null;
+  } catch (e) {
+    debugPrint('❌ Exchange rate fetch error: $e');
+    final cached = _prefs?.getString('exchange_rates_cache');
+    if (cached != null) return jsonDecode(cached);
+    return null;
+  }
+}
+
+/// Get last updated timestamp for exchange rates
+String? getExchangeRatesLastUpdated() {
+  return _prefs?.getString('exchange_rates_updated');
+}
+
 }

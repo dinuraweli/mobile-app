@@ -27,37 +27,30 @@ class TaxCalculatorService {
     double monthlyCommission = 0,
     double monthlyAllowances = 0,
   }) {
-    // Total monthly earnings
     double totalMonthlyEarnings = monthlyBasicSalary + monthlyBonus + monthlyCommission + monthlyAllowances;
     
-    // EPF Calculations
     double monthlyEpfEmployee = totalMonthlyEarnings * epfEmployeeRate;
     double monthlyEpfEmployer = totalMonthlyEarnings * epfEmployerRate;
     double monthlyEtfEmployer = totalMonthlyEarnings * etfEmployerRate;
     double totalEmployerContribution = monthlyEpfEmployer + monthlyEtfEmployer;
     
-    // Salary after EPF
-    double salaryAfterEpf = totalMonthlyEarnings - monthlyEpfEmployee;
-    
-    // Annual calculations
     double annualGrossSalary = totalMonthlyEarnings * 12;
-    double annualSalaryAfterEpf = salaryAfterEpf * 12;
     double annualEpfEmployee = monthlyEpfEmployee * 12;
     double annualEpfEmployer = monthlyEpfEmployer * 12;
     double annualEtfEmployer = monthlyEtfEmployer * 12;
     
-    // Tax calculation
-    double annualTaxableIncome = (annualSalaryAfterEpf - annualTaxFreeAllowance).clamp(0, double.infinity);
+    // Tax on GROSS salary (before EPF per IRD rules)
+    double annualTaxableIncome = (annualGrossSalary - annualTaxFreeAllowance).clamp(0, double.infinity);
+    
     double annualTax = 0;
     List<TaxBracketBreakdown> bracketBreakdowns = [];
-    
     double remaining = annualTaxableIncome;
+    
     for (var bracket in taxBrackets) {
       if (remaining <= 0) break;
       double bracketRange = bracket.maxAmount - bracket.minAmount;
       double taxableInBracket = remaining > bracketRange ? bracketRange : remaining;
       double taxInBracket = taxableInBracket * bracket.rate;
-      
       if (taxableInBracket > 0) {
         bracketBreakdowns.add(TaxBracketBreakdown(
           label: bracket.label,
@@ -66,19 +59,13 @@ class TaxCalculatorService {
           taxAmount: taxInBracket,
         ));
       }
-      
       annualTax += taxInBracket;
       remaining -= taxableInBracket;
     }
     
-    // Monthly tax
     double monthlyTax = annualTax / 12;
-    
-    // Net salary
-    double monthlyNetSalary = salaryAfterEpf - monthlyTax;
+    double monthlyNetSalary = totalMonthlyEarnings - monthlyEpfEmployee - monthlyTax;
     double annualNetSalary = monthlyNetSalary * 12;
-    
-    // Effective tax rate
     double effectiveTaxRate = annualGrossSalary > 0 ? (annualTax / annualGrossSalary) * 100 : 0;
 
     return TaxCalculationResult(

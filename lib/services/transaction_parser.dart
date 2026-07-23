@@ -264,8 +264,9 @@ RegExp(r"([A-Za-z0-9\s&.\-']+?)\s+as\s+(?:POS|ATM|TXN)", caseSensitive: false),
     // Extract bank from body if not found from sender
     if (bank == 'Unknown Bank') {
       final lower = sms.toLowerCase();
-      if (lower.contains('combank') || lower.contains('commercial')) bank = 'Commercial Bank';
-      else if (lower.contains('hnb')) bank = 'HNB';
+      if (lower.contains('combank') || lower.contains('commercial')) {
+        bank = 'Commercial Bank';
+      } else if (lower.contains('hnb')) bank = 'HNB';
       else if (lower.contains('sampath')) bank = 'Sampath Bank';
       else if (lower.contains('boc')) bank = 'BOC';
     }

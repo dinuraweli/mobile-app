@@ -307,6 +307,30 @@ class AnalyticsService {
 
     return insights;
   }
+
+  /// Get transactions for a specific category in a given month
+Future<List<AppTransaction>> getTransactionsByCategory({
+  required int userId,
+  required String category,
+  int? month,
+  int? year,
+}) async {
+  month ??= DateTime.now().month;
+  year ??= DateTime.now().year;
+
+  final startDate = DateTime(year, month, 1);
+  final endDate = DateTime(year, month + 1, 0, 23, 59, 59);
+
+  final allTransactions = await _db.getTransactionsByUserId(userId);
+  
+  return allTransactions.where((t) {
+    return t.createdAt.isAfter(startDate.subtract(const Duration(seconds: 1))) &&
+           t.createdAt.isBefore(endDate.add(const Duration(seconds: 1))) &&
+           t.category == category;
+  }).toList()
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+}
+
 }
 
 // ==================== DATA MODELS ====================

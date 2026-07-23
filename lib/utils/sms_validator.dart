@@ -14,11 +14,12 @@ class SmsValidator {
       'commercial', 'combank', 'boc', 'sampath', 
       'hnb', 'seylan', 'ntb', 'ndb', 'peoples',
       'hsbc', 'dfcc', 'pan asia', 'union',
+      'nations', 'card', 'cards', 'visa', 'master',
     ];
     bool isBankSender = allowedBankSenders.any((bank) => lowerSender.contains(bank));
 
     // 2. Check for transaction-specific keywords
-    final transactionKeywords = ['debited', 'credited', 'payment', 'transfer', 'lkr', 'rs', 'purchase', 'withdrawal', 'deposit'];
+    final transactionKeywords = ['debited', 'credited', 'payment', 'transfer', 'lkr', 'rs', 'purchase', 'withdrawal', 'deposit' 'transaction approved', 'transaction', 'purchase',];
     bool hasTransactionKeyword = transactionKeywords.any((keyword) => lowerBody.contains(keyword));
 
     // 3. Filter out promotional messages to save Gemini quota
@@ -42,12 +43,16 @@ class SmsValidator {
     if (lower.contains('ndb')) return 'NDB';
     if (lower.contains('seylan')) return 'Seylan Bank';
     if (lower.contains('ntb') || lower.contains('nations trust')) return 'Nations Trust Bank';
+    if (lower.contains('nations') || lower.contains('nations trust')) return 'Nations Trust Bank';
     if (lower.contains('hsbc')) return 'HSBC';
     if (lower.contains('dfcc')) return 'DFCC Bank';
     if (lower.contains('peoples') || lower.contains('people\'s')) return 'Peoples Bank';
     if (lower.contains('pan asia')) return 'Pan Asia Bank';
     if (lower.contains('union')) return 'Union Bank';
-    
+    if (lower.contains('card') || lower.contains('visa') || lower.contains('master')) {
+  // Try to identify bank from the message body later
+  return 'Card Transaction';
+}
     return 'Unknown Bank';
   }
 

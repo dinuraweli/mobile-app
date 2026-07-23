@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../services/sl_financial_data.dart';
 import 'dart:math' as math;
 import 'tax_calculator_screen.dart' as tax_screens;
+import 'exchange_rate_screen.dart';
 
 class FinancialToolsScreen extends StatelessWidget {
   const FinancialToolsScreen({super.key});
@@ -13,108 +14,106 @@ class FinancialToolsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFF0B0C10),
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Financial Tools',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Sri Lanka-specific calculators',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 10),
+              const Text(
+                'Financial Tools',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Sri Lanka-specific calculators & market data',
+                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              // Section label
+              Padding(
+                padding: const EdgeInsets.only(top: 16, bottom: 12),
+                child: Text(
+                  'CALCULATORS',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                  ),
                 ),
               ),
-            ),
-
-            // Tax Calculator
-            SliverToBoxAdapter(
-              child: _ToolCard(
-                icon: Icons.account_balance_rounded,
-                title: 'APIT / PAYE Tax Calculator',
-                subtitle: 'Calculate your monthly income tax deductions',
-                color: const Color(0xFFEF5350),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const tax_screens.TaxCalculatorScreen()),
+              // Grid row 1
+              Row(children: [
+                Expanded(
+                  child: _ToolCard(
+                    icon: Icons.account_balance_rounded,
+                    title: 'Income Tax',
+                    subtitle: 'APIT, EPF & ETF',
+                    color: const Color(0xFFEF5350),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const tax_screens.TaxCalculatorScreen())),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ToolCard(
+                    icon: Icons.directions_car_rounded,
+                    title: 'Vehicle Leasing',
+                    subtitle: 'CBSL LTV rates',
+                    color: const Color(0xFFFFA726),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeasingCalculatorScreen())),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 12),
+              // Grid row 2
+              Row(children: [
+                Expanded(
+                  child: _ToolCard(
+                    icon: Icons.savings_rounded,
+                    title: 'Fixed Deposit',
+                    subtitle: 'Compare bank rates',
+                    color: const Color(0xFF42A5F5),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const FDCalculatorScreen())),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ToolCard(
+                    icon: Icons.credit_card_rounded,
+                    title: 'Loan Calculator',
+                    subtitle: '6 loan types',
+                    color: const Color(0xFFAB47BC),
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LoanCalculatorScreen())),
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 28),
+              // Section label for market data
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'MARKET DATA',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 2,
+                  ),
                 ),
               ),
-            ),
-
-            // EPF/ETF Calculator
-            SliverToBoxAdapter(
-              child: _ToolCard(
-                icon: Icons.savings_rounded,
-                title: 'EPF / ETF Calculator',
-                subtitle: 'Project your retirement fund growth',
-                color: const Color(0xFF4CAF50),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const EPFCalculatorScreen()),
-                ),
+              // Full width card
+              _ToolCard(
+                icon: Icons.currency_exchange_rounded,
+                title: 'Exchange Rate Tracker',
+                subtitle: 'Daily rates across all major banks',
+                color: const Color(0xFF26C6DA),
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ExchangeRateScreen())),
+                isFullWidth: true,
               ),
-            ),
-
-            // Leasing Calculator
-            SliverToBoxAdapter(
-              child: _ToolCard(
-                icon: Icons.directions_car_rounded,
-                title: 'Vehicle Leasing Calculator',
-                subtitle: 'Calculate monthly rentals for vehicles',
-                color: const Color(0xFFFFA726),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LeasingCalculatorScreen()),
-                ),
-              ),
-            ),
-
-            // FD Calculator
-            SliverToBoxAdapter(
-              child: _ToolCard(
-                icon: Icons.trending_up_rounded,
-                title: 'Fixed Deposit Calculator',
-                subtitle: 'Compare FD rates across Sri Lankan banks',
-                color: const Color(0xFF42A5F5),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const FDCalculatorScreen()),
-                ),
-              ),
-            ),
-
-            // Loan Calculator
-            SliverToBoxAdapter(
-              child: _ToolCard(
-                icon: Icons.monetization_on_rounded,
-                title: 'Loan Calculator',
-                subtitle: 'Personal & business loan EMI calculations',
-                color: const Color(0xFFAB47BC),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoanCalculatorScreen()),
-                ),
-              ),
-            ),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 120)),
-          ],
+              const SizedBox(height: 100),
+            ],
+          ),
         ),
       ),
     );
@@ -129,6 +128,7 @@ class _ToolCard extends StatelessWidget {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
+  final bool isFullWidth;
 
   const _ToolCard({
     required this.icon,
@@ -136,65 +136,52 @@ class _ToolCard extends StatelessWidget {
     required this.subtitle,
     required this.color,
     required this.onTap,
+    this.isFullWidth = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A1A2E),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: color, size: 26),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.3), size: 16),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
         ),
+        child: isFullWidth
+            ? Row(children: [
+                Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+                    const SizedBox(height: 3),
+                    Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12)),
+                  ]),
+                ),
+                Icon(Icons.arrow_forward_ios, color: Colors.white.withOpacity(0.25), size: 16),
+              ])
+            : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  width: 48, height: 48,
+                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(height: 14),
+                Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+                const SizedBox(height: 3),
+                Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 12, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ]),
       ),
     );
   }
 }
-
 // ==================== TAX CALCULATOR ====================
 
 class TaxCalculatorScreen extends StatefulWidget {
@@ -297,104 +284,7 @@ ${SLFinancialData.apitBrackets.map((b) {
 
 // ==================== EPF CALCULATOR ====================
 
-class EPFCalculatorScreen extends StatefulWidget {
-  const EPFCalculatorScreen({super.key});
 
-  @override
-  State<EPFCalculatorScreen> createState() => _EPFCalculatorScreenState();
-}
-
-class _EPFCalculatorScreenState extends State<EPFCalculatorScreen> {
-  final _salaryController = TextEditingController();
-  final _yearsController = TextEditingController(text: '30');
-  String _result = '';
-  bool _calculated = false;
-
-  void _calculate() {
-    double salary = double.tryParse(_salaryController.text) ?? 0;
-    int years = int.tryParse(_yearsController.text) ?? 30;
-    if (salary <= 0) return;
-
-    var epf = SLFinancialData.calculateEPF(salary);
-    double etf = SLFinancialData.calculateETF(salary);
-    double projected = SLFinancialData.projectEPFBalance(salary, years);
-
-    setState(() {
-      _result = '''
-Monthly Salary: LKR ${NumberFormat('#,##0.00').format(salary)}
-
-EPF Contributions:
-• Employee (8%): LKR ${NumberFormat('#,##0.00').format(epf['employee']!)}
-• Employer (12%): LKR ${NumberFormat('#,##0.00').format(epf['employer']!)}
-• Total Monthly: LKR ${NumberFormat('#,##0.00').format(epf['totalMonthly']!)}
-• Total Yearly: LKR ${NumberFormat('#,##0.00').format(epf['totalYearly']!)}
-
-ETF Contribution:
-• Employer (3%): LKR ${NumberFormat('#,##0.00').format(etf)}/month
-
-Projected EPF Balance after $years years:
-LKR ${NumberFormat('#,##0.00').format(projected)}
-
-(Assuming ${(SLFinancialData.epfInterestRate * 100).toStringAsFixed(0)}% annual interest)
-''';
-      _calculated = true;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0C10),
-      appBar: AppBar(title: const Text('EPF/ETF Calculator'), backgroundColor: const Color(0xFF1A1A2E)),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            _buildInput('Monthly Gross Salary (LKR)', _salaryController, Icons.money),
-            const SizedBox(height: 16),
-            _buildInput('Years to Project', _yearsController, Icons.calendar_today),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _calculate,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF66FCF1),
-                foregroundColor: const Color(0xFF0B0C10),
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              child: const Text('Calculate EPF', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            ),
-            if (_calculated) ...[
-              const SizedBox(height: 24),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16)),
-                child: Text(_result, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.6)),
-              ),
-            ],
-            const SizedBox(height: 100),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInput(String label, TextEditingController controller, IconData icon) {
-    return TextField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      style: const TextStyle(color: Colors.white, fontSize: 18),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: const Color(0xFF66FCF1)),
-        filled: true,
-        fillColor: const Color(0xFF1A1A2E),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-      ),
-    );
-  }
-}
 
 // ==================== ENHANCED LEASING CALCULATOR ====================
 
@@ -1804,7 +1694,7 @@ class _LoanCalculatorScreenState extends State<LoanCalculatorScreen> {
 
   Widget _buildDropdown(String label, String value, List<String> items, Function(String?) onChanged) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       dropdownColor: const Color(0xFF1A1A2E),
       style: const TextStyle(color: Colors.white, fontSize: 14),
       decoration: InputDecoration(labelText: label, labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)), filled: true, fillColor: const Color(0xFF0B0C10), border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none)),

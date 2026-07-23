@@ -5,6 +5,7 @@ import '../models/transaction.dart';
 import '../services/analytics_service.dart';
 import '../widgets/spending_bar_chart.dart';
 import '../widgets/top_merchants_widget.dart';
+import 'category_detail_screen.dart';
 
 class InsightsScreen extends StatefulWidget {
   final List<AppTransaction> transactions;
@@ -233,28 +234,52 @@ class _InsightsScreenState extends State<InsightsScreen> {
   }
 
   Widget _buildCategories() {
-    if (_summary!.sortedCategories.isEmpty) return const SizedBox();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Category Breakdown', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
-          child: Column(
-            children: _summary!.sortedCategories.take(5).map((cat) {
-              double pct = _summary!.categoryPercentages[cat.key] ?? 0;
-              return Padding(
+  if (_summary!.sortedCategories.isEmpty) return const SizedBox();
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Category Breakdown', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+      const SizedBox(height: 4),
+      Text('Tap a category to see transactions', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        child: Column(
+          children: _summary!.sortedCategories.take(5).map((cat) {
+            double pct = _summary!.categoryPercentages[cat.key] ?? 0;
+            String displayName = _catDisplay(cat.key);
+            return GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CategoryDetailScreen(
+                      category: cat.key,
+                      displayName: displayName,
+                      userId: widget.userId,
+                      month: _months.indexOf(_selectedMonth) + 1,
+                      year: DateTime.now().year,
+                      color: _catColor(cat.key),
+                      icon: _catIcon(cat.key),
+                    ),
+                  ),
+                );
+              },
+              child: Padding(
                 padding: const EdgeInsets.only(bottom: 14),
                 child: Column(children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     Row(children: [
                       Icon(_catIcon(cat.key), size: 18, color: _catColor(cat.key)),
                       const SizedBox(width: 8),
-                      Text(_catDisplay(cat.key), style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
+                      Text(displayName, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
                     ]),
-                    Text('${pct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+                    Row(children: [
+                      Text('${pct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.3), size: 18),
+                    ]),
                   ]),
                   const SizedBox(height: 8),
                   ClipRRect(
@@ -262,13 +287,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
                     child: LinearProgressIndicator(value: pct / 100, backgroundColor: Colors.white.withOpacity(0.04), valueColor: AlwaysStoppedAnimation<Color>(_catColor(cat.key)), minHeight: 6),
                   ),
                 ]),
-              );
-            }).toList(),
-          ),
+              ),
+            );
+          }).toList(),
         ),
-      ]),
-    );
-  }
+      ),
+    ]),
+  );
+}
 
   Widget _buildInsights() {
     return Padding(

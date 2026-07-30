@@ -36,29 +36,31 @@ class FinancialConfigService {
         minimumFetchInterval: Duration.zero,
       ));
     } catch (e) {
-      debugPrint('⚠️ Firebase Remote Config not available: $e');
+      debugPrint('Firebase Remote Config not available: $e');
       _remoteConfig = null;
     }
+  }
+
+  // ==================== GET ACTIVE CONFIG (for calculators) ====================
+
+  Future<FinancialConfig> getActiveConfig() async {
+    return await getConfig();
   }
 
   // ==================== GET CONFIG ====================
 
   Future<FinancialConfig> getConfig() async {
-    // Return cached if already loaded
     if (_currentConfig != null && !_currentConfig!.isExpired) {
       return _currentConfig!;
     }
 
-    // Layer 2: Try local cache
     final cached = await _loadFromCache();
     if (cached != null && !cached.isExpired) {
       _currentConfig = cached;
-      // Background refresh
       _refreshInBackground();
       return cached;
     }
 
-    // Layer 3: Try remote fetch
     final remote = await _fetchFromRemote();
     if (remote != null) {
       _currentConfig = remote;
@@ -66,8 +68,7 @@ class FinancialConfigService {
       return remote;
     }
 
-    // Layer 1: Use defaults
-    debugPrint('⚠️ Using hardcoded default config');
+    debugPrint('Using hardcoded default config');
     _currentConfig = DefaultConfig.defaultConfig;
     return _currentConfig!;
   }
@@ -75,32 +76,28 @@ class FinancialConfigService {
   // ==================== FORCE REFRESH ====================
 
   Future<FinancialConfig?> forceRefresh() async {
-    debugPrint('🔄 Force refreshing financial config...');
-    
+    debugPrint('Force refreshing financial config...');
     final remote = await _fetchFromRemote(forceFetch: true);
     if (remote != null) {
       _currentConfig = remote;
       await _saveToCache(remote);
       return remote;
     }
-    
     return null;
   }
 
-  // ==================== LAYER 2: LOCAL CACHE ====================
+  // ==================== LOCAL CACHE ====================
 
   Future<FinancialConfig?> _loadFromCache() async {
     try {
       final jsonStr = _prefs?.getString(_cacheKey);
       if (jsonStr == null || jsonStr.isEmpty) return null;
-
       final json = jsonDecode(jsonStr);
       final config = FinancialConfig.fromJson(json, source: 'cache');
-      
-      debugPrint('📦 Loaded config from cache (v${config.version})');
+      debugPrint('Loaded config from cache (v${config.version})');
       return config;
     } catch (e) {
-      debugPrint('❌ Cache load error: $e');
+      debugPrint('Cache load error: $e');
       return null;
     }
   }
@@ -109,17 +106,17 @@ class FinancialConfigService {
     try {
       await _prefs?.setString(_cacheKey, jsonEncode(config.toJson()));
       await _prefs?.setString(_versionKey, config.version);
-      debugPrint('💾 Config saved to cache (v${config.version})');
+      debugPrint('Config saved to cache (v${config.version})');
     } catch (e) {
-      debugPrint('❌ Cache save error: $e');
+      debugPrint('Cache save error: $e');
     }
   }
 
-  // ==================== LAYER 3: REMOTE FETCH ====================
+  // ==================== REMOTE FETCH ====================
 
   Future<FinancialConfig?> _fetchFromRemote({bool forceFetch = false}) async {
     if (_remoteConfig == null) {
-      debugPrint('⚠️ Remote config not available');
+      debugPrint('Remote config not available');
       return null;
     }
 
@@ -127,32 +124,28 @@ class FinancialConfigService {
       if (forceFetch) {
         await _remoteConfig!.fetchAndActivate();
       } else {
-        // Check if we need to fetch
         final lastFetch = _remoteConfig!.lastFetchTime;
         final lastFetchStatus = _remoteConfig!.lastFetchStatus;
-        
         if (lastFetchStatus == RemoteConfigFetchStatus.success &&
             DateTime.now().difference(lastFetch).inHours < 6) {
-          debugPrint('⏭️ Skipping fetch - last fetch was ${DateTime.now().difference(lastFetch).inMinutes}m ago');
+          debugPrint('Skipping fetch - last fetch was ${DateTime.now().difference(lastFetch).inMinutes}m ago');
         } else {
           await _remoteConfig!.fetchAndActivate();
         }
       }
 
       final jsonStr = _remoteConfig!.getString('financial_config_json');
-      
       if (jsonStr.isEmpty || jsonStr == '{}') {
-        debugPrint('⚠️ Remote config is empty');
+        debugPrint('Remote config is empty');
         return null;
       }
 
       final json = jsonDecode(jsonStr);
       final config = FinancialConfig.fromJson(json, source: 'remote');
-      
-      debugPrint('☁️ Fetched config from remote (v${config.version})');
+      debugPrint('Fetched config from remote (v${config.version})');
       return config;
     } catch (e) {
-      debugPrint('❌ Remote fetch error: $e');
+      debugPrint('Remote fetch error: $e');
       return null;
     }
   }
@@ -165,16 +158,49 @@ class FinancialConfigService {
       if (remote != null && (_currentConfig == null || remote.version != _currentConfig!.version)) {
         _currentConfig = remote;
         await _saveToCache(remote);
-        debugPrint('🔄 Background refresh: Config updated to v${remote.version}');
+        debugPrint('Background refresh: Config updated to v${remote.version}');
       }
     });
+  }
+
+  // ==================== EXCHANGE RATES ====================
+
+  Future<Map<String, dynamic>?> getExchangeRates() async {
+    try {
+      if (_remoteConfig != null) {
+        debugPrint('Fetching exchange rates from Firebase...');
+        await _remoteConfig!.fetchAndActivate();
+        final jsonStr = _remoteConfig!.getString('exchange_rates_json');
+        if (jsonStr.isNotEmpty && jsonStr != '{}') {
+          final data = jsonDecode(jsonStr);
+          await _prefs?.setString('exchange_rates_cache', jsonStr);
+          await _prefs?.setString('exchange_rates_updated', data['updated_at'] ?? DateTime.now().toIso8601String());
+          debugPrint('Exchange rates fetched from remote (v${data['version']})');
+          return data;
+        }
+      }
+      final cached = _prefs?.getString('exchange_rates_cache');
+      if (cached != null && cached.isNotEmpty) {
+        debugPrint('Exchange rates loaded from cache');
+        return jsonDecode(cached);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Exchange rate fetch error: $e');
+      final cached = _prefs?.getString('exchange_rates_cache');
+      if (cached != null) return jsonDecode(cached);
+      return null;
+    }
+  }
+
+  String? getExchangeRatesLastUpdated() {
+    return _prefs?.getString('exchange_rates_updated');
   }
 
   // ==================== UTILITY ====================
 
   String get currentVersion => _currentConfig?.version ?? 'unknown';
   String get currentSource => _currentConfig?.sourceLabel ?? 'not loaded';
-  
   bool get isUsingDefaults => _currentConfig?.isDefault ?? false;
   bool get isUsingRemote => _currentConfig?.isRemote ?? false;
 
@@ -182,55 +208,6 @@ class FinancialConfigService {
     await _prefs?.remove(_cacheKey);
     await _prefs?.remove(_versionKey);
     _currentConfig = null;
-    debugPrint('🧹 Config cache cleared');
+    debugPrint('Config cache cleared');
   }
-
-  // ==================== EXCHANGE RATES ====================
-
-/// Get exchange rates from Firebase Remote Config or cache
-Future<Map<String, dynamic>?> getExchangeRates() async {
-  try {
-    // Force fetch fresh data from Firebase
-    if (_remoteConfig != null) {
-      debugPrint('🔄 Fetching exchange rates from Firebase...');
-      await _remoteConfig!.fetchAndActivate();
-      
-      final jsonStr = _remoteConfig!.getString('exchange_rates_json');
-      debugPrint('📩 Exchange rates raw: ${jsonStr.substring(0, jsonStr.length > 50 ? 50 : jsonStr.length)}...');
-      
-      if (jsonStr.isNotEmpty && jsonStr != '{}') {
-        final data = jsonDecode(jsonStr);
-        await _prefs?.setString('exchange_rates_cache', jsonStr);
-        await _prefs?.setString('exchange_rates_updated', data['updated_at'] ?? DateTime.now().toIso8601String());
-        debugPrint('☁️ Exchange rates fetched from remote (v${data['version']})');
-        return data;
-      } else {
-        debugPrint('⚠️ exchange_rates_json is empty or not found in Firebase');
-      }
-    } else {
-      debugPrint('⚠️ Remote config not initialized');
-    }
-    
-    // Try cache
-    final cached = _prefs?.getString('exchange_rates_cache');
-    if (cached != null && cached.isNotEmpty) {
-      debugPrint('📦 Exchange rates loaded from cache');
-      return jsonDecode(cached);
-    }
-    
-    debugPrint('⚠️ No exchange rates available');
-    return null;
-  } catch (e) {
-    debugPrint('❌ Exchange rate fetch error: $e');
-    final cached = _prefs?.getString('exchange_rates_cache');
-    if (cached != null) return jsonDecode(cached);
-    return null;
-  }
-}
-
-/// Get last updated timestamp for exchange rates
-String? getExchangeRatesLastUpdated() {
-  return _prefs?.getString('exchange_rates_updated');
-}
-
 }

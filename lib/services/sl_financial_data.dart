@@ -1,19 +1,8 @@
 // File: lib/services/sl_financial_data.dart
-import 'dart:math' as math;
 
 class SLFinancialData {
-  // ==================== TAX RATES (2025/2026) ====================
+  // ==================== CONSTANTS ====================
   
-  static const List<TaxBracket> apitBrackets = [
-    TaxBracket(0, 500000, 0.06),
-    TaxBracket(500000, 1000000, 0.12),
-    TaxBracket(1000000, 1500000, 0.18),
-    TaxBracket(1500000, 2000000, 0.24),
-    TaxBracket(2000000, double.infinity, 0.30),
-  ];
-
-  static const List<TaxBracket> payeBrackets = apitBrackets;
-  static const double taxFreeAllowance = 1200000;
   static const double epfEmployeeRate = 0.08;
   static const double epfEmployerRate = 0.12;
   static const double etfEmployerRate = 0.03;
@@ -90,47 +79,9 @@ class SLFinancialData {
   ];
 
   static const List<int> loanTenureOptions = [12, 24, 36, 48, 60, 84, 120, 180, 240, 300];
-
-  // ==================== CALCULATORS ====================
-
-  static double calculateMonthlyTax(double monthlySalary) {
-    double annualSalary = monthlySalary * 12;
-    double taxableIncome = (annualSalary - taxFreeAllowance).clamp(0, double.infinity);
-    double annualTax = 0;
-    double remaining = taxableIncome;
-    for (var bracket in apitBrackets) {
-      if (remaining <= 0) break;
-      double bracketRange = bracket.maxAmount - bracket.minAmount;
-      double taxableInBracket = remaining > bracketRange ? bracketRange : remaining;
-      annualTax += taxableInBracket * bracket.rate;
-      remaining -= taxableInBracket;
-    }
-    return annualTax / 12;
-  }
-
-  static Map<String, double> calculateEPF(double monthlySalary) {
-    double employeeContribution = monthlySalary * epfEmployeeRate;
-    double employerContribution = monthlySalary * epfEmployerRate;
-    double totalMonthly = employeeContribution + employerContribution;
-    return {'employee': employeeContribution, 'employer': employerContribution, 'totalMonthly': totalMonthly, 'totalYearly': totalMonthly * 12};
-  }
-
-  static double calculateETF(double monthlySalary) => monthlySalary * etfEmployerRate;
-
-  static double projectEPFBalance(double monthlySalary, int years) {
-    double monthlyContribution = monthlySalary * (epfEmployeeRate + epfEmployerRate);
-    double monthlyRate = epfInterestRate / 12;
-    int months = years * 12;
-    return monthlyContribution * ((math.pow(1 + monthlyRate, months) - 1) / monthlyRate) * (1 + monthlyRate);
-  }
 }
 
 // ==================== HELPER CLASSES ====================
-
-class TaxBracket {
-  final double minAmount, maxAmount, rate;
-  const TaxBracket(this.minAmount, this.maxAmount, this.rate);
-}
 
 class VehicleLTV {
   final String category, description;

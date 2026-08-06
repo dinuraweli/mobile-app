@@ -67,38 +67,48 @@ const AppTransactionSchema = CollectionSchema(
       name: r'date',
       type: IsarType.string,
     ),
-    r'isSynced': PropertySchema(
+    r'foreignAmount': PropertySchema(
       id: 10,
+      name: r'foreignAmount',
+      type: IsarType.double,
+    ),
+    r'foreignCurrency': PropertySchema(
+      id: 11,
+      name: r'foreignCurrency',
+      type: IsarType.string,
+    ),
+    r'isSynced': PropertySchema(
+      id: 12,
       name: r'isSynced',
       type: IsarType.bool,
     ),
     r'merchant': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'merchant',
       type: IsarType.string,
     ),
     r'smsRawText': PropertySchema(
-      id: 12,
+      id: 14,
       name: r'smsRawText',
       type: IsarType.string,
     ),
     r'source': PropertySchema(
-      id: 13,
+      id: 15,
       name: r'source',
       type: IsarType.string,
     ),
     r'transactionId': PropertySchema(
-      id: 14,
+      id: 16,
       name: r'transactionId',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 15,
+      id: 17,
       name: r'type',
       type: IsarType.string,
     ),
     r'userId': PropertySchema(
-      id: 16,
+      id: 18,
       name: r'userId',
       type: IsarType.long,
     )
@@ -156,6 +166,12 @@ int _appTransactionEstimateSize(
   bytesCount += 3 + object.bankName.length * 3;
   bytesCount += 3 + object.category.length * 3;
   bytesCount += 3 + object.date.length * 3;
+  {
+    final value = object.foreignCurrency;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.merchant.length * 3;
   {
     final value = object.smsRawText;
@@ -185,13 +201,15 @@ void _appTransactionSerialize(
   writer.writeString(offsets[7], object.category);
   writer.writeDateTime(offsets[8], object.createdAt);
   writer.writeString(offsets[9], object.date);
-  writer.writeBool(offsets[10], object.isSynced);
-  writer.writeString(offsets[11], object.merchant);
-  writer.writeString(offsets[12], object.smsRawText);
-  writer.writeString(offsets[13], object.source);
-  writer.writeString(offsets[14], object.transactionId);
-  writer.writeString(offsets[15], object.type);
-  writer.writeLong(offsets[16], object.userId);
+  writer.writeDouble(offsets[10], object.foreignAmount);
+  writer.writeString(offsets[11], object.foreignCurrency);
+  writer.writeBool(offsets[12], object.isSynced);
+  writer.writeString(offsets[13], object.merchant);
+  writer.writeString(offsets[14], object.smsRawText);
+  writer.writeString(offsets[15], object.source);
+  writer.writeString(offsets[16], object.transactionId);
+  writer.writeString(offsets[17], object.type);
+  writer.writeLong(offsets[18], object.userId);
 }
 
 AppTransaction _appTransactionDeserialize(
@@ -211,14 +229,16 @@ AppTransaction _appTransactionDeserialize(
     category: reader.readString(offsets[7]),
     createdAt: reader.readDateTime(offsets[8]),
     date: reader.readString(offsets[9]),
+    foreignAmount: reader.readDoubleOrNull(offsets[10]),
+    foreignCurrency: reader.readStringOrNull(offsets[11]),
     id: id,
-    isSynced: reader.readBoolOrNull(offsets[10]) ?? false,
-    merchant: reader.readString(offsets[11]),
-    smsRawText: reader.readStringOrNull(offsets[12]),
-    source: reader.readStringOrNull(offsets[13]) ?? 'manual',
-    transactionId: reader.readString(offsets[14]),
-    type: reader.readString(offsets[15]),
-    userId: reader.readLong(offsets[16]),
+    isSynced: reader.readBoolOrNull(offsets[12]) ?? false,
+    merchant: reader.readString(offsets[13]),
+    smsRawText: reader.readStringOrNull(offsets[14]),
+    source: reader.readStringOrNull(offsets[15]) ?? 'manual',
+    transactionId: reader.readString(offsets[16]),
+    type: reader.readString(offsets[17]),
+    userId: reader.readLong(offsets[18]),
   );
   return object;
 }
@@ -251,18 +271,22 @@ P _appTransactionDeserializeProp<P>(
     case 9:
       return (reader.readString(offset)) as P;
     case 10:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 11:
-      return (reader.readString(offset)) as P;
-    case 12:
       return (reader.readStringOrNull(offset)) as P;
+    case 12:
+      return (reader.readBoolOrNull(offset) ?? false) as P;
     case 13:
-      return (reader.readStringOrNull(offset) ?? 'manual') as P;
+      return (reader.readString(offset)) as P;
     case 14:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 15:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset) ?? 'manual') as P;
     case 16:
+      return (reader.readString(offset)) as P;
+    case 17:
+      return (reader.readString(offset)) as P;
+    case 18:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1674,6 +1698,244 @@ extension AppTransactionQueryFilter
     });
   }
 
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignAmountIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'foreignAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignAmountIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'foreignAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignAmountEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'foreignAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignAmountGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'foreignAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignAmountLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'foreignAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignAmountBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'foreignAmount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'foreignCurrency',
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'foreignCurrency',
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'foreignCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'foreignCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'foreignCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'foreignCurrency',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'foreignCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'foreignCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'foreignCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'foreignCurrency',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'foreignCurrency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition>
+      foreignCurrencyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'foreignCurrency',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<AppTransaction, AppTransaction, QAfterFilterCondition> idEqualTo(
       Id value) {
     return QueryBuilder.apply(this, (query) {
@@ -2634,6 +2896,34 @@ extension AppTransactionQuerySortBy
     });
   }
 
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      sortByForeignAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      sortByForeignAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignAmount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      sortByForeignCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignCurrency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      sortByForeignCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignCurrency', Sort.desc);
+    });
+  }
+
   QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy> sortByIsSynced() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isSynced', Sort.asc);
@@ -2861,6 +3151,34 @@ extension AppTransactionQuerySortThenBy
     });
   }
 
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      thenByForeignAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      thenByForeignAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignAmount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      thenByForeignCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignCurrency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy>
+      thenByForeignCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'foreignCurrency', Sort.desc);
+    });
+  }
+
   QueryBuilder<AppTransaction, AppTransaction, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -3037,6 +3355,21 @@ extension AppTransactionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<AppTransaction, AppTransaction, QDistinct>
+      distinctByForeignAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'foreignAmount');
+    });
+  }
+
+  QueryBuilder<AppTransaction, AppTransaction, QDistinct>
+      distinctByForeignCurrency({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'foreignCurrency',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<AppTransaction, AppTransaction, QDistinct> distinctByIsSynced() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'isSynced');
@@ -3153,6 +3486,20 @@ extension AppTransactionQueryProperty
   QueryBuilder<AppTransaction, String, QQueryOperations> dateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'date');
+    });
+  }
+
+  QueryBuilder<AppTransaction, double?, QQueryOperations>
+      foreignAmountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'foreignAmount');
+    });
+  }
+
+  QueryBuilder<AppTransaction, String?, QQueryOperations>
+      foreignCurrencyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'foreignCurrency');
     });
   }
 

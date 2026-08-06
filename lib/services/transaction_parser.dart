@@ -5,6 +5,8 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import '../config/api_config.dart';
 import '../models/transaction.dart';
 import '../utils/sms_validator.dart';
+import 'on_device_parser.dart';
+
 
 class TransactionParser {
   // ==================== TIER 0: SPAM BLOCKING ====================
@@ -17,108 +19,79 @@ class TransactionParser {
     RegExp(r'\b(loan|credit card|personal loan).*(?:approved|eligible|offer)\b', caseSensitive: false),
   ];
 
-  // ==================== TIER 1: CACHES ====================
+  static bool _isSpamOrOTP(String sms) {
+  final lower = sms.toLowerCase();
+  final bankKeywords = ['credited', 'debited', 'balance', 'avl bal', 'av.bal', 'acct', 'account', 'payment', 'transfer', 'purchase', 'withdrawal', 'deposit', 'txn'];
+  final hasBankKeyword = bankKeywords.any((k) => lower.contains(k));
+  final hasAmount = RegExp(r'(?:LKR|Rs\.?)\s*[\d,]+\.?\d{0,2}').hasMatch(sms) ||
+                    RegExp(r'(?:credited|debited)\s*(?:by\s*)?(?:LKR|Rs\.?)?\s*[\d,]+').hasMatch(sms);
   
+  if (hasBankKeyword && hasAmount) return false;
+  
+  if (!hasBankKeyword) {
+    for (var pattern in _spamPatterns) {
+      if (pattern.hasMatch(sms)) {
+        debugPrint('📵 Blocked: Pure OTP/Spam (no banking context)');
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+  // ==================== TIER 1: CACHES ====================
+
   static final Map<String, AppTransaction> _exactMatchCache = {};
-  static final Map<String, Map<String, dynamic>> _patternCache = {};
 
   // ==================== MAIN PARSING METHOD ====================
   
-  static Future<AppTransaction?> parse(String smsBody, {required int userId, String? sender}) async {
-    if (smsBody.trim().isEmpty) return null;
+  // In TransactionParser class, update the parse method:
 
-    // TIER 0: Block spam/OTP
-    if (_isSpamOrOTP(smsBody)) {
-      debugPrint('📵 Tier 0: Blocked spam/OTP');
-      return null;
-    }
+static Future<AppTransaction?> parse(String smsBody, {required int userId, String? sender}) async {
+  if (smsBody.trim().isEmpty) return null;
 
-    // TIER 1: Check exact match cache
-    final exactHash = '${userId}_${smsBody.trim().toLowerCase()}';
-    if (_exactMatchCache.containsKey(exactHash)) {
-      debugPrint('💾 Tier 1: Exact cache hit');
-      return _exactMatchCache[exactHash];
-    }
-
-    // Check similar pattern cache
-    final patternHash = '${userId}_${_normalizeForCache(smsBody)}';
-    if (_patternCache.containsKey(patternHash)) {
-      debugPrint('💾 Tier 1: Pattern cache hit');
-      final data = _patternCache[patternHash]!;
-      final transaction = _buildTransaction(data, smsBody, userId, sender: sender);
-      _exactMatchCache[exactHash] = transaction;
-      return transaction;
-    }
-
-    // TIER 2: Gemini API
-    debugPrint('🤖 Tier 2: Calling Gemini API');
-    final geminiResult = await _tryGemini(smsBody, userId, sender: sender);
-    
-    if (geminiResult != null) {
-      _exactMatchCache[exactHash] = geminiResult;
-      _patternCache[patternHash] = {
-        'bankName': geminiResult.bank,
-        'amount': geminiResult.amount,
-        'merchant': geminiResult.merchant,
-        'type': geminiResult.type,
-        'category': geminiResult.category,
-        'date': geminiResult.date,
-        'account_mask': geminiResult.accountMask,
-        'available_balance': geminiResult.availableBalance,
-        'confidence': 0.95,
-      };
-      return geminiResult;
-    }
-
-    // TIER 3: Regex fallback
-    debugPrint('⚠️ Tier 3: Gemini failed, trying regex fallback');
-    final regexResult = _tryRegexFallback(smsBody, userId, sender: sender);
-    
-    if (regexResult != null) {
-      _exactMatchCache[exactHash] = regexResult;
-      debugPrint('⚠️ Regex fallback succeeded with lower confidence');
-      return regexResult;
-    }
-
-    debugPrint('❌ All tiers failed to parse SMS');
+  // TIER 0: Block spam/OTP
+  if (_isSpamOrOTP(smsBody)) {
+    debugPrint('📵 Tier 0: Blocked spam/OTP');
     return null;
   }
 
-  // ==================== TIER 0 IMPLEMENTATION ====================
+  // TIER 1: Try on-device parser FIRST (new!)
+  debugPrint('🔍 Tier 1: On-device parser');
+  final onDeviceResult = OnDeviceParser.parse(smsBody, userId: userId, sender: sender);
   
-  static bool _isSpamOrOTP(String sms) {
-    // First check: Does it have banking keywords?
-    final lower = sms.toLowerCase();
-    final bankKeywords = ['credited', 'debited', 'balance', 'avl bal', 'av.bal', 'acct', 'account', 'payment', 'transfer', 'purchase', 'withdrawal', 'deposit', 'txn'];
-    final hasBankKeyword = bankKeywords.any((k) => lower.contains(k));
-    final hasAmount = RegExp(r'(?:LKR|Rs\.?)\s*[\d,]+\.?\d{0,2}').hasMatch(sms) ||
-                      RegExp(r'(?:credited|debited)\s*(?:by\s*)?(?:LKR|Rs\.?)?\s*[\d,]+').hasMatch(sms);
-    
-    if (hasBankKeyword && hasAmount) return false;
-    
-    if (!hasBankKeyword) {
-      for (var pattern in _spamPatterns) {
-        if (pattern.hasMatch(sms)) {
-          debugPrint('📵 Blocked: Pure OTP/Spam (no banking context)');
-          return true;
-        }
-      }
+  if (onDeviceResult != null) {
+    if (onDeviceResult.aiConfidence != null && onDeviceResult.aiConfidence! >= 0.70) {
+      debugPrint('✅ On-device: High confidence (${(onDeviceResult.aiConfidence! * 100).toStringAsFixed(0)}%) - using result');
+      return onDeviceResult;
     }
-    
-    return false;
+    // Low confidence - still save but mark accordingly
+    debugPrint('⚠️ On-device: Low confidence - will try Gemini for verification');
   }
 
-  // ==================== TIER 1 IMPLEMENTATION ====================
-  
-  static String _normalizeForCache(String sms) {
-    return sms
-        .replaceAll(RegExp(r'\d+\.?\d*'), '###')
-        .replaceAll(RegExp(r'\d{2,}'), '###')
-        .replaceAll(RegExp(r'[A-Za-z]{3,}'), 'WWW')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim()
-        .toLowerCase();
+  // TIER 2: Try Gemini for low-confidence or failed on-device parsing
+  if (ApiConfig.isGeminiConfigured) {
+    debugPrint('🤖 Tier 2: Calling Gemini API for verification');
+    final geminiResult = await _tryGemini(smsBody, userId, sender: sender);
+    
+    if (geminiResult != null) {
+      // Use Gemini result (higher accuracy)
+      _exactMatchCache[smsBody.trim().toLowerCase()] = geminiResult;
+      return geminiResult;
+    }
   }
+
+  // Return on-device result as fallback (even if low confidence)
+  if (onDeviceResult != null) {
+    debugPrint('📦 Using on-device result as fallback');
+    return onDeviceResult;
+  }
+
+  // TIER 3: Regex fallback
+  debugPrint('⚠️ Tier 3: Regex fallback');
+  final regexResult = _tryRegexFallback(smsBody, userId, sender: sender);
+  return regexResult;
+}
 
   // ==================== TIER 2: GEMINI ====================
   
@@ -133,34 +106,59 @@ class TransactionParser {
         model: 'gemini-2.5-flash',
         apiKey: ApiConfig.geminiApiKey,
         systemInstruction: Content.system('''
-You are a Sri Lankan bank SMS transaction extractor. Extract transaction details with HIGH accuracy.
+You are a Sri Lankan bank SMS transaction extractor. Extract ALL details accurately.
 
-CRITICAL RULES:
-1. "date" - Extract the EXACT transaction date from the SMS. Look for patterns like:
-   - "on 24-MAY" → "24-MAY"
-   - "24-05-2026" → "24-MAY"  
-   - "13-Jul-2026" → "13-JUL"
-   If a date is clearly visible, extract it. Do NOT use "Today" unless absolutely no date is present.
-2. "category" MUST be one of: "Groceries", "Transport", "Dining", "Bills & Utilities", "Recurring Payments", "Shopping", "Transfers", "Income", "General"
-3. "type" MUST be "debit" or "credit" (lowercase)
-4. "amount" must be a positive number
-5. "merchant" should be the vendor/recipient name
-6. "bankName" - Extract the bank name if visible in the SMS
-7. "account_mask" - last 4 digits of account/card
-8. "availableBalance" - remaining balance as number, null if not present
+FIELDS TO EXTRACT:
+- "amount": LKR amount as a number (0 if foreign currency with no LKR amount shown)
+- "merchant": vendor/recipient name (clean, without reference codes or trailing numbers)
+- "type": "debit" or "credit" (lowercase only)
+- "category": see list below
+- "date": exact date in DD-MMM format (e.g. "03-AUG"). Never use "Today" if a date is visible.
+- "bankName": bank name from SMS or sender
+- "account_mask": last 2-4 digits of account/card number
+- "accountType": "Savings", "Current", or "Credit Card"
+- "availableBalance": balance after transaction as number, null if not shown
+- "foreignCurrency": 3-letter currency code if transaction is in foreign currency (e.g. "USD"), null otherwise
+- "foreignAmount": amount in foreign currency as number, null if LKR transaction
 
-SRI LANKAN CATEGORIES:
-- Keells, Cargills, Food City, Arpico → "Groceries"
-- PickMe, Uber, Kangaroo → "Transport"
-- Restaurant, Hotel, Cafe, KFC, Pizza → "Dining"
-- Dialog, Mobitel, SLT, CEB, Water Board → "Bills & Utilities"
-- Netflix, Spotify, Amazon Prime → "Recurring Payments"
-- Odel, Fashion, Shopping Mall → "Shopping"
+DATE RULES:
+- "on 28/07/26" → "28-JUL"
+- "(03-Aug-2026 ...)" → "03-AUG"
+- "Date:26.07.26" → "26-JUL"
 
-Return ONLY valid JSON:
-{"amount": 3450.00, "merchant": "Keells Super", "type": "debit", "category": "Groceries", "date": "24-MAY", "bankName": "Commercial Bank", "account_mask": "4432", "availableBalance": 12700.00}
+TYPE RULES:
+- "credited to Ac No" → "credit"
+- "debited to Ac No" → "debit"
+- "Transaction Approved on your Card" → "debit"
+- "Reason:MB BillPmt/Credit Card Pmt" → "debit"
+- "Reason:S/O FROM ..." → "credit"
+- "Thank you for your payment" → "credit" (card payment acknowledgement)
 
-If ABSOLUTELY not a transaction: {"error": "not_transaction"}
+MERCHANT RULES:
+- "VC : **6302 :UBER EATS 852 (Apprx)" → merchant is "Uber Eats" (ignore trailing reference numbers)
+- "Location:ANTHROPIC* CLAUDE SUB, US" → merchant is "Anthropic Claude Sub"
+- "Reason:MB BillPmt/Credit Card Pmt Non HNB/552474..." → merchant is "Credit Card Payment"
+- "Reason:MB:Subscriptions" → merchant is "Subscriptions" (a transfer label)
+- "Reason:S/O FROM WELIKALA J P D" → merchant is "Welikala J P D"
+- "at FOOD STUDIO PVT LTD" → merchant is "Food Studio"
+
+CATEGORIES (pick exactly one):
+- "Groceries": Keells, Cargills, Food City, Arpico, Spar, Sathosa
+- "Transport": PickMe, Uber (rides only), Kangaroo, fuel, parking, highway
+- "Dining": Uber Eats, UberEats, restaurants, cafes, KFC, Pizza Hut, food delivery
+- "Bills & Utilities": Dialog, Mobitel, SLT, CEB, water, electricity, bill payments
+- "Recurring Payments": Netflix, Spotify, Amazon, Apple, Google, Adobe, Anthropic, subscriptions
+- "Shopping": Odel, malls, clothing, Daraz, online shopping
+- "Transfers": credit card payments, bank transfers, standing orders, MB transfers
+- "Income": salary, credited amounts, interest, standing orders received
+- "General": anything else
+
+Return ONLY valid JSON. Examples:
+{"amount": 5569.92, "merchant": "Uber Eats", "type": "debit", "category": "Dining", "date": "03-AUG", "bankName": "HNB", "account_mask": "6302", "accountType": "Savings", "availableBalance": 12763.45, "foreignCurrency": null, "foreignAmount": null}
+{"amount": 0, "merchant": "Anthropic Claude Sub", "type": "debit", "category": "Recurring Payments", "date": "03-AUG", "bankName": "HNB", "account_mask": "7603", "accountType": "Savings", "availableBalance": 9147.66, "foreignCurrency": "USD", "foreignAmount": 20.0}
+{"amount": 42070.00, "merchant": "Credit Card Payment", "type": "debit", "category": "Transfers", "date": "02-AUG", "bankName": "HNB", "account_mask": "XX34", "accountType": "Savings", "availableBalance": 63684.57, "foreignCurrency": null, "foreignAmount": null}
+
+If not a transaction: {"error": "not_transaction"}
 '''),
         generationConfig: GenerationConfig(
           responseMimeType: 'application/json',
@@ -187,7 +185,9 @@ If ABSOLUTELY not a transaction: {"error": "not_transaction"}
         return null;
       }
 
-      if (data['amount'] == null || data['amount'] == 0) {
+      // Allow amount == 0 only for foreign currency transactions
+      final isFx = data['foreignCurrency'] != null && data['foreignCurrency'] != 'null';
+      if ((data['amount'] == null || data['amount'] == 0) && !isFx) {
         debugPrint('Gemini returned zero amount');
         return null;
       }
@@ -241,8 +241,11 @@ If ABSOLUTELY not a transaction: {"error": "not_transaction"}
       return null;
     }
 
-    // Determine type
-    if (sms.toLowerCase().contains('credit') || sms.toLowerCase().contains('deposited') || sms.toLowerCase().contains('received')) {
+    // Determine type — match same logic as on_device_parser to avoid false positives on "Credit Card Pmt"
+    final lower = sms.toLowerCase();
+    if (RegExp(r'credited\s+to|deposited|salary\s+credit').hasMatch(lower)) {
+      type = 'credit';
+    } else if (RegExp(r'\bcredited\b').hasMatch(lower)) {
       type = 'credit';
     }
 
@@ -266,9 +269,9 @@ RegExp(r"([A-Za-z0-9\s&.\-']+?)\s+as\s+(?:POS|ATM|TXN)", caseSensitive: false),
       final lower = sms.toLowerCase();
       if (lower.contains('combank') || lower.contains('commercial')) {
         bank = 'Commercial Bank';
-      } else if (lower.contains('hnb')) bank = 'HNB';
-      else if (lower.contains('sampath')) bank = 'Sampath Bank';
-      else if (lower.contains('boc')) bank = 'BOC';
+      } else if (lower.contains('hnb')) { bank = 'HNB'; }
+      else if (lower.contains('sampath')) { bank = 'Sampath Bank'; }
+      else if (lower.contains('boc')) { bank = 'BOC'; }
     }
 
     // Extract account mask
@@ -296,7 +299,7 @@ RegExp(r"([A-Za-z0-9\s&.\-']+?)\s+as\s+(?:POS|ATM|TXN)", caseSensitive: false),
       }
     }
 
-    debugPrint('⚠️ Regex fallback: $amount at $merchant ($type) - Bank: $bank - Date: $date');
+    if (kDebugMode) debugPrint('⚠️ Regex fallback: $amount at $merchant ($type) - Bank: $bank - Date: $date');
 
     return AppTransaction.create(
       userId: userId,
@@ -378,6 +381,11 @@ RegExp(r"([A-Za-z0-9\s&.\-']+?)\s+as\s+(?:POS|ATM|TXN)", caseSensitive: false),
       }
     }
 
+    final fxCurrency = data['foreignCurrency']?.toString();
+    final fxAmount = data['foreignAmount'] != null
+        ? double.tryParse(data['foreignAmount'].toString())
+        : null;
+
     return AppTransaction.create(
       userId: userId,
       bank: bankName,
@@ -387,10 +395,13 @@ RegExp(r"([A-Za-z0-9\s&.\-']+?)\s+as\s+(?:POS|ATM|TXN)", caseSensitive: false),
       type: data['type']?.toString() ?? 'debit',
       date: displayDate,
       category: data['category']?.toString() ?? 'General',
+      accountType: data['accountType']?.toString() ?? 'Savings',
       accountMask: data['account_mask']?.toString() ?? '',
       availableBalance: data['availableBalance'] != null
           ? double.tryParse(data['availableBalance'].toString())
           : null,
+      foreignCurrency: (fxCurrency == null || fxCurrency == 'null') ? null : fxCurrency,
+      foreignAmount: fxAmount,
       source: 'sms',
       smsRawText: smsBody,
       aiConfidence: data['confidence'] != null
@@ -414,11 +425,9 @@ RegExp(r"([A-Za-z0-9\s&.\-']+?)\s+as\s+(?:POS|ATM|TXN)", caseSensitive: false),
   // ==================== UTILITY ====================
   
   static int get exactCacheSize => _exactMatchCache.length;
-  static int get patternCacheSize => _patternCache.length;
 
   static void clearCache() {
     _exactMatchCache.clear();
-    _patternCache.clear();
     debugPrint('🧹 All caches cleared');
   }
 }

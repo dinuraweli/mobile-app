@@ -34,7 +34,7 @@ class TopMerchantsWidget extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A2E),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,7 +57,7 @@ class TopMerchantsWidget extends StatelessWidget {
                 Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF66FCF1).withOpacity(0.1),
+                    color: const Color(0xFF66FCF1).withValues(alpha:0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Center(child: Icon(_getMerchantIcon(merchant.key), color: const Color(0xFF66FCF1), size: 18)),
@@ -66,7 +66,7 @@ class TopMerchantsWidget extends StatelessWidget {
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
-                      Text('${index + 1}.', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12, fontWeight: FontWeight.w600)),
+                      Text('${index + 1}.', style: TextStyle(color: Colors.white.withValues(alpha:0.3), fontSize: 12, fontWeight: FontWeight.w600)),
                       const SizedBox(width: 6),
                       Expanded(child: Text(merchant.key, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
                     ]),
@@ -75,7 +75,7 @@ class TopMerchantsWidget extends StatelessWidget {
                       borderRadius: BorderRadius.circular(3),
                       child: LinearProgressIndicator(
                         value: pct,
-                        backgroundColor: Colors.white.withOpacity(0.05),
+                        backgroundColor: Colors.white.withValues(alpha:0.05),
                         valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF66FCF1)),
                         minHeight: 4,
                       ),
@@ -85,7 +85,7 @@ class TopMerchantsWidget extends StatelessWidget {
                 const SizedBox(width: 12),
                 Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   Text('LKR ${NumberFormat('#,##0').format(merchant.value)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                  Text('${share.toStringAsFixed(1)}%', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10)),
+                  Text('${share.toStringAsFixed(1)}%', style: TextStyle(color: Colors.white.withValues(alpha:0.4), fontSize: 10)),
                 ]),
               ]),
             );

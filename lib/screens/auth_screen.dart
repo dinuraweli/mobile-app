@@ -1,6 +1,8 @@
 // File: lib/screens/auth_screen.dart
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/biometric_service.dart';
+import '../services/database_service.dart';
 import '../models/user.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -68,7 +70,8 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _isLoggingIn = false);
 
     if (result.success && result.user != null) {
-      widget.onLoginSuccess(result.user!);
+      await _promptEnableBiometric(result.user!);
+      if (mounted) widget.onLoginSuccess(result.user!);
     } else {
       _showError(result.message ?? 'Login failed');
     }
@@ -109,13 +112,89 @@ class _AuthScreenState extends State<AuthScreen>
     setState(() => _isSigningUp = false);
 
     if (result.success && result.user != null) {
-      _showSuccess('Welcome to SalliMate, $name! 🎉');
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) widget.onLoginSuccess(result.user!);
-      });
+      _showSuccess('Welcome to SalliMate, $name!');
+      await Future.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+      await _promptEnableBiometric(result.user!);
+      if (mounted) widget.onLoginSuccess(result.user!);
     } else {
       _showError(result.message ?? 'Signup failed');
     }
+  }
+
+  Future<void> _promptEnableBiometric(AppUser user) async {
+    final biometric = BiometricService();
+    if (user.isBiometricEnabled) return;
+    final available = await biometric.isAvailable();
+    if (!available || !mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1B1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: const Color(0xFF66FCF1).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.fingerprint_rounded, color: Color(0xFF66FCF1), size: 30),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Enable Biometric Login?',
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Use Face ID or fingerprint to unlock SalliMate faster next time.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 28),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white54,
+                      side: const BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Not Now'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      user.isBiometricEnabled = true;
+                      await DatabaseService().updateUser(user);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF66FCF1),
+                      foregroundColor: Colors.black,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text('Enable', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showError(String message) {
@@ -203,7 +282,7 @@ class _AuthScreenState extends State<AuthScreen>
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF66FCF1).withOpacity(0.3),
+                color: const Color(0xFF66FCF1).withValues(alpha:0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 8),
               ),
@@ -236,7 +315,7 @@ class _AuthScreenState extends State<AuthScreen>
           'Your Smart Financial Assistant',
           style: TextStyle(
             fontSize: 14,
-            color: Colors.white.withOpacity(0.5),
+            color: Colors.white.withValues(alpha:0.5),
             letterSpacing: 1,
           ),
         ),
@@ -253,12 +332,12 @@ class _AuthScreenState extends State<AuthScreen>
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: const Color(0xFF66FCF1).withOpacity(0.15),
+          color: const Color(0xFF66FCF1).withValues(alpha:0.15),
           borderRadius: BorderRadius.circular(14),
         ),
         indicatorSize: TabBarIndicatorSize.tab,
         labelColor: const Color(0xFF66FCF1),
-        unselectedLabelColor: Colors.white.withOpacity(0.4),
+        unselectedLabelColor: Colors.white.withValues(alpha:0.4),
         labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         dividerColor: Colors.transparent,
         padding: const EdgeInsets.all(4),
@@ -299,7 +378,7 @@ class _AuthScreenState extends State<AuthScreen>
             suffix: IconButton(
               icon: Icon(
                 _loginObscurePassword ? Icons.visibility_off : Icons.visibility,
-                color: Colors.white.withOpacity(0.4),
+                color: Colors.white.withValues(alpha:0.4),
               ),
               onPressed: () => setState(() => _loginObscurePassword = !_loginObscurePassword),
             ),
@@ -336,7 +415,7 @@ class _AuthScreenState extends State<AuthScreen>
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFF66FCF1).withOpacity(0.05),
+            color: const Color(0xFF66FCF1).withValues(alpha:0.05),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Text(
@@ -390,7 +469,7 @@ class _AuthScreenState extends State<AuthScreen>
             suffix: IconButton(
               icon: Icon(
                 _signupObscurePassword ? Icons.visibility_off : Icons.visibility,
-                color: Colors.white.withOpacity(0.4),
+                color: Colors.white.withValues(alpha:0.4),
               ),
               onPressed: () => setState(() => _signupObscurePassword = !_signupObscurePassword),
             ),
@@ -410,7 +489,7 @@ class _AuthScreenState extends State<AuthScreen>
             suffix: IconButton(
               icon: Icon(
                 _signupObscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
-                color: Colors.white.withOpacity(0.4),
+                color: Colors.white.withValues(alpha:0.4),
               ),
               onPressed: () => setState(() => _signupObscureConfirmPassword = !_signupObscureConfirmPassword),
             ),
@@ -435,7 +514,7 @@ class _AuthScreenState extends State<AuthScreen>
             Expanded(
               child: RichText(
                 text: TextSpan(
-                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12),
+                  style: TextStyle(color: Colors.white.withValues(alpha:0.6), fontSize: 12),
                   children: const [
                     TextSpan(text: 'I agree to the '),
                     TextSpan(
@@ -491,9 +570,9 @@ class _AuthScreenState extends State<AuthScreen>
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-      labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-      prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.4)),
+      hintStyle: TextStyle(color: Colors.white.withValues(alpha:0.3)),
+      labelStyle: TextStyle(color: Colors.white.withValues(alpha:0.5)),
+      prefixIcon: Icon(icon, color: Colors.white.withValues(alpha:0.4)),
       suffixIcon: suffix,
       filled: true,
       fillColor: const Color(0xFF1A1A2E),

@@ -1,5 +1,8 @@
 // File: lib/screens/admin_panel_screen.dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../services/exchange_rate_service.dart';
 import '../services/firestore_service.dart';
 import '../services/sl_financial_data.dart';
 
@@ -14,6 +17,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final FirestoreService _firestore = FirestoreService();
   bool _isLoading = false;
   String _status = '';
+  bool _isAuthorized = false;
+  bool _isCheckingAuth = true;
+
+  static const _adminEmail = 'lehan@email.com';
 
   // FD Rates controllers
   final Map<String, Map<String, TextEditingController>> _fdControllers = {};
@@ -22,12 +29,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final _taxFreeAllowanceController = TextEditingController();
   final List<Map<String, dynamic>> _taxBrackets = [];
 
+  // Exchange rate controllers: currency → bank → 'buying'|'selling'
+  final Map<String, Map<String, Map<String, TextEditingController>>> _fxControllers = {};
+  String _selectedFxCurrency = 'USD';
+  String? _lastPublishedAt;
+
   @override
   void initState() {
     super.initState();
-    _initFDControllers();
-    _initTaxBrackets();
-    _loadCurrentRates();
+    _checkAdminAuth();
+  }
+
+  Future<void> _checkAdminAuth() async {
+    final email = FirebaseAuth.instance.currentUser?.email?.toLowerCase().trim() ?? '';
+    final authorized = _adminEmail.isNotEmpty && email == _adminEmail.toLowerCase();
+    if (mounted) {
+      setState(() {
+        _isAuthorized = authorized;
+        _isCheckingAuth = false;
+      });
+      if (authorized) {
+        _initFDControllers();
+        _initTaxBrackets();
+        _initFXControllers();
+        _loadCurrentRates();
+      }
+    }
   }
 
   void _initFDControllers() {
@@ -35,7 +62,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       _fdControllers[bank] = {};
       for (var period in ['3 Months', '6 Months', '1 Year', '2 Years', '3 Years', '5 Years']) {
         double rate = SLFinancialData.fdRates[bank]?[period] ?? 0.10;
-        _fdControllers[bank]![period] = TextEditingController(text: '${(rate * 100).toStringAsFixed(2)}');
+        _fdControllers[bank]![period] = TextEditingController(text: (rate * 100).toStringAsFixed(2));
       }
     }
   }
@@ -51,12 +78,30 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ]);
   }
 
+  void _initFXControllers() {
+    for (var currency in ExchangeRateService.currencies) {
+      _fxControllers[currency] = {};
+      for (var bank in ExchangeRateService.banks) {
+        _fxControllers[currency]![bank] = {
+          'buying': TextEditingController(),
+          'selling': TextEditingController(),
+        };
+      }
+    }
+  }
+
   Future<void> _loadCurrentRates() async {
     setState(() { _isLoading = true; _status = 'Loading current rates...'; });
     try {
-      final rates = await _firestore.getRates();
+      final results = await Future.wait([
+        _firestore.getRates(),
+        _firestore.getExchangeRates(),
+      ]);
+
+      final rates = results[0];
+      final fxData = results[1];
+
       if (rates != null) {
-        // Update FD controllers
         if (rates['fd_rates'] != null) {
           final fdRates = rates['fd_rates'] as Map<String, dynamic>;
           for (var bank in fdRates.keys) {
@@ -64,16 +109,48 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               final periods = fdRates[bank] as Map<String, dynamic>;
               for (var period in periods.keys) {
                 if (_fdControllers[bank]!.containsKey(period)) {
-                  _fdControllers[bank]![period]!.text = '${(double.parse(periods[period].toString()) * 100).toStringAsFixed(2)}';
+                  _fdControllers[bank]![period]!.text =
+                      (double.parse(periods[period].toString()) * 100).toStringAsFixed(2);
                 }
               }
             }
           }
         }
-        _status = 'Current rates loaded';
-      } else {
-        _status = 'No saved rates found. Using defaults.';
+
+        // Load last published timestamp
+        if (rates['published_at'] != null) {
+          final ts = rates['published_at'];
+          if (ts is DateTime) {
+            _lastPublishedAt = DateFormat('d MMM yyyy, h:mm a').format(ts);
+          } else {
+            // Firestore Timestamp
+            try {
+              final dt = (ts as dynamic).toDate() as DateTime;
+              _lastPublishedAt = DateFormat('d MMM yyyy, h:mm a').format(dt);
+            } catch (_) {
+              _lastPublishedAt = rates['version']?.toString();
+            }
+          }
+        }
       }
+
+      if (fxData != null && fxData['rates'] != null) {
+        final storedRates = fxData['rates'] as Map<String, dynamic>;
+        for (var currency in storedRates.keys) {
+          if (!_fxControllers.containsKey(currency)) continue;
+          final bankMap = storedRates[currency] as Map<String, dynamic>;
+          for (var bank in bankMap.keys) {
+            if (!_fxControllers[currency]!.containsKey(bank)) continue;
+            final pair = bankMap[bank] as Map<String, dynamic>;
+            _fxControllers[currency]![bank]!['buying']!.text =
+                (pair['buying'] as num).toStringAsFixed(2);
+            _fxControllers[currency]![bank]!['selling']!.text =
+                (pair['selling'] as num).toStringAsFixed(2);
+          }
+        }
+      }
+
+      _status = 'Rates loaded';
     } catch (e) {
       _status = 'Error loading rates: $e';
     }
@@ -89,26 +166,50 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       for (var bank in _fdControllers.keys) {
         fdRates[bank] = {};
         for (var period in _fdControllers[bank]!.keys) {
-          double rate = (double.tryParse(_fdControllers[bank]![period]!.text) ?? 10) / 100;
-          fdRates[bank]![period] = rate;
+          fdRates[bank]![period] =
+              (double.tryParse(_fdControllers[bank]![period]!.text) ?? 10) / 100;
         }
       }
       await _firestore.saveFDRates(fdRates);
 
       // Save tax brackets
-      List<Map<String, dynamic>> brackets = _taxBrackets.map((b) => {
+      final brackets = _taxBrackets.map((b) => {
         'min': double.tryParse(b['min']) ?? 0,
         'max': b['max'].toString().isEmpty ? 999999999 : (double.tryParse(b['max']) ?? 0),
         'rate': (double.tryParse(b['rate']) ?? 0) / 100,
         'label': b['label'],
       }).toList();
-      await _firestore.saveTaxBrackets(brackets, double.tryParse(_taxFreeAllowanceController.text) ?? 1800000);
+      await _firestore.saveTaxBrackets(
+          brackets, double.tryParse(_taxFreeAllowanceController.text) ?? 1800000);
 
-      // Publish
+      // Save exchange rates
+      final fxPayload = <String, dynamic>{};
+      for (var currency in _fxControllers.keys) {
+        fxPayload[currency] = {};
+        for (var bank in _fxControllers[currency]!.keys) {
+          final buying = double.tryParse(_fxControllers[currency]![bank]!['buying']!.text);
+          final selling = double.tryParse(_fxControllers[currency]![bank]!['selling']!.text);
+          if (buying != null && selling != null) {
+            (fxPayload[currency] as Map)[bank] = {'buying': buying, 'selling': selling};
+          }
+        }
+      }
+      final now = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      await _firestore.saveExchangeRates({
+        'rates': fxPayload,
+        'version': now,
+        'updated_at': now,
+      });
+
+      // Publish timestamp
       await _firestore.publishRates();
-      setState(() => _status = '✅ Rates published successfully!');
+      final publishedLabel = DateFormat('d MMM yyyy, h:mm a').format(DateTime.now());
+      setState(() {
+        _status = 'Published successfully';
+        _lastPublishedAt = publishedLabel;
+      });
     } catch (e) {
-      setState(() => _status = '❌ Error: $e');
+      setState(() => _status = 'Error: $e');
     }
     setState(() => _isLoading = false);
   }
@@ -121,11 +222,50 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       }
     }
     _taxFreeAllowanceController.dispose();
+    for (var currency in _fxControllers.keys) {
+      for (var bank in _fxControllers[currency]!.keys) {
+        _fxControllers[currency]![bank]!['buying']!.dispose();
+        _fxControllers[currency]![bank]!['selling']!.dispose();
+      }
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingAuth) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF0B0C10),
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF66FCF1))),
+      );
+    }
+
+    if (!_isAuthorized) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF0B0C10),
+        appBar: AppBar(title: const Text('Admin Panel'), backgroundColor: const Color(0xFF1A1A2E)),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.lock_outline_rounded, color: Colors.redAccent, size: 72),
+              SizedBox(height: 20),
+              Text('Access Denied', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'You are not authorised to access the admin panel.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFF0B0C10),
       appBar: AppBar(
@@ -146,11 +286,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_lastPublishedAt != null) _buildLastPublishedCard(),
+                  if (_lastPublishedAt != null) const SizedBox(height: 20),
                   _buildSectionHeader('FD Rates (%)'),
                   _buildFDTable(),
                   const SizedBox(height: 24),
                   _buildSectionHeader('Tax Brackets'),
                   _buildTaxTable(),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader('Exchange Rates (LKR)'),
+                  _buildFXSection(),
                   const SizedBox(height: 32),
                   _buildPublishButton(),
                   const SizedBox(height: 40),
@@ -176,7 +321,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       child: DataTable(
         headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1A2E)),
         dataRowColor: WidgetStateProperty.all(const Color(0xFF0B0C10)),
-        border: TableBorder.all(color: Colors.white.withOpacity(0.1), width: 1),
+        border: TableBorder.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
         columns: [
           const DataColumn(label: Text('Bank', style: TextStyle(color: Color(0xFF66FCF1), fontWeight: FontWeight.bold))),
           ...periods.map((p) => DataColumn(label: Text(p, style: const TextStyle(color: Color(0xFF66FCF1), fontWeight: FontWeight.bold)))),
@@ -225,7 +370,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         child: DataTable(
           headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1A2E)),
           dataRowColor: WidgetStateProperty.all(const Color(0xFF0B0C10)),
-          border: TableBorder.all(color: Colors.white.withOpacity(0.1), width: 1),
+          border: TableBorder.all(color: Colors.white.withValues(alpha: 0.1), width: 1),
           columns: const [
             DataColumn(label: Text('Label', style: TextStyle(color: Color(0xFF66FCF1)))),
             DataColumn(label: Text('Min', style: TextStyle(color: Color(0xFF66FCF1)))),
@@ -248,12 +393,119 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       child: ElevatedButton.icon(
         onPressed: _saveAndPublish,
         icon: const Icon(Icons.cloud_upload),
-        label: const Text('Publish to Firebase'),
+        label: const Text('Save & Publish to Firebase'),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF4CAF50),
           foregroundColor: Colors.white,
           padding: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLastPublishedCard() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1B1E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF66FCF1).withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_done_rounded, color: Color(0xFF66FCF1), size: 18),
+          const SizedBox(width: 10),
+          const Text('Last published: ', style: TextStyle(color: Colors.white54, fontSize: 13)),
+          Text(_lastPublishedAt!, style: const TextStyle(color: Color(0xFF66FCF1), fontSize: 13, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFXSection() {
+    final currencies = ExchangeRateService.currencies;
+    final banks = ExchangeRateService.banks;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Currency selector chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: currencies.map((c) {
+              final selected = c == _selectedFxCurrency;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedFxCurrency = c),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: selected ? const Color(0xFF66FCF1) : const Color(0xFF1A1A2E),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: selected ? const Color(0xFF66FCF1) : Colors.white24,
+                    ),
+                  ),
+                  child: Text(
+                    c,
+                    style: TextStyle(
+                      color: selected ? const Color(0xFF0B0C10) : Colors.white70,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Buy/sell table for selected currency
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            headingRowColor: WidgetStateProperty.all(const Color(0xFF1A1A2E)),
+            dataRowColor: WidgetStateProperty.all(const Color(0xFF0B0C10)),
+            border: TableBorder.all(color: Colors.white.withValues(alpha: 0.08), width: 1),
+            columnSpacing: 12,
+            columns: const [
+              DataColumn(label: Text('Bank', style: TextStyle(color: Color(0xFF66FCF1), fontWeight: FontWeight.bold))),
+              DataColumn(label: Text('Buying (LKR)', style: TextStyle(color: Color(0xFF4CAF50), fontWeight: FontWeight.bold))),
+              DataColumn(label: Text('Selling (LKR)', style: TextStyle(color: Color(0xFFFFA726), fontWeight: FontWeight.bold))),
+            ],
+            rows: banks.map((bank) {
+              final buyCtrl = _fxControllers[_selectedFxCurrency]?[bank]?['buying'];
+              final sellCtrl = _fxControllers[_selectedFxCurrency]?[bank]?['selling'];
+              return DataRow(cells: [
+                DataCell(Text(bank, style: const TextStyle(color: Colors.white, fontSize: 12))),
+                DataCell(_fxField(buyCtrl)),
+                DataCell(_fxField(sellCtrl)),
+              ]);
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fxField(TextEditingController? ctrl) {
+    if (ctrl == null) return const SizedBox.shrink();
+    return SizedBox(
+      width: 90,
+      child: TextField(
+        controller: ctrl,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        style: const TextStyle(color: Colors.white, fontSize: 13),
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.all(8),
+          border: OutlineInputBorder(),
+          hintText: '0.00',
+          hintStyle: TextStyle(color: Colors.white24),
         ),
       ),
     );

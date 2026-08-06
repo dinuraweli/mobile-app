@@ -127,16 +127,16 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFF66FCF1).withOpacity(0.15) : Colors.transparent,
+                  color: isSelected ? const Color(0xFF66FCF1).withValues(alpha:0.15) : Colors.transparent,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isSelected ? const Color(0xFF66FCF1) : Colors.white.withOpacity(0.1),
+                    color: isSelected ? const Color(0xFF66FCF1) : Colors.white.withValues(alpha:0.1),
                   ),
                 ),
                 child: Text(
                   currency,
                   style: TextStyle(
-                    color: isSelected ? const Color(0xFF66FCF1) : Colors.white.withOpacity(0.6),
+                    color: isSelected ? const Color(0xFF66FCF1) : Colors.white.withValues(alpha:0.6),
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                     fontSize: 16,
                   ),
@@ -155,13 +155,13 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: isFallback
-            ? const Color(0xFFFFA726).withOpacity(0.08)
-            : const Color(0xFF4CAF50).withOpacity(0.08),
+            ? const Color(0xFFFFA726).withValues(alpha:0.08)
+            : const Color(0xFF4CAF50).withValues(alpha:0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isFallback
-              ? const Color(0xFFFFA726).withOpacity(0.2)
-              : const Color(0xFF4CAF50).withOpacity(0.2),
+              ? const Color(0xFFFFA726).withValues(alpha:0.2)
+              : const Color(0xFF4CAF50).withValues(alpha:0.2),
         ),
       ),
       child: Row(
@@ -186,7 +186,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
           if (_lastUpdated != null && !isFallback)
             Text(
               'Updated: ${_formatTimestamp(_lastUpdated!)}',
-              style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10),
+              style: TextStyle(color: Colors.white.withValues(alpha:0.4), fontSize: 10),
             ),
         ],
       ),
@@ -217,7 +217,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
-            color: const Color(0xFF66FCF1).withOpacity(0.08),
+            color: const Color(0xFF66FCF1).withValues(alpha:0.08),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           ),
           child: const Row(
@@ -240,7 +240,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.03))),
+                  border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha:0.03))),
                 ),
                 child: Row(
                   children: [
@@ -270,7 +270,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFF4CAF50).withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.2))),
+            decoration: BoxDecoration(color: const Color(0xFF4CAF50).withValues(alpha:0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha:0.2))),
             child: Column(children: [
               const Text('Best to Sell Currency', style: TextStyle(color: Colors.white70, fontSize: 11)),
               const SizedBox(height: 6),
@@ -285,7 +285,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
         Expanded(
           child: Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFFEF5350).withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFEF5350).withOpacity(0.2))),
+            decoration: BoxDecoration(color: const Color(0xFFEF5350).withValues(alpha:0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFEF5350).withValues(alpha:0.2))),
             child: Column(children: [
               const Text('Best to Buy Currency', style: TextStyle(color: Colors.white70, fontSize: 11)),
               const SizedBox(height: 6),
@@ -303,7 +303,7 @@ class _ExchangeRateScreenState extends State<ExchangeRateScreen> {
   Widget _buildDisclaimer() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFFFFA726).withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFFA726).withOpacity(0.15))),
+      decoration: BoxDecoration(color: const Color(0xFFFFA726).withValues(alpha:0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFFA726).withValues(alpha:0.15))),
       child: const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(Icons.warning_amber_rounded, color: Color(0xFFFFA726), size: 20),
         SizedBox(width: 10),

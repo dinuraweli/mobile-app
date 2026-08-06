@@ -54,18 +54,18 @@ class _FloatingNavBarState extends State<FloatingNavBar>
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha:0.5),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
             BoxShadow(
-              color: const Color(0xFF66FCF1).withOpacity(0.04),
+              color: const Color(0xFF66FCF1).withValues(alpha:0.04),
               blurRadius: 1,
               offset: const Offset(0, -1),
             ),
           ],
           border: Border.all(
-            color: Colors.white.withOpacity(0.06),
+            color: Colors.white.withValues(alpha:0.06),
             width: 1,
           ),
         ),
@@ -137,7 +137,7 @@ class _NavItem extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           color: isSelected
-              ? const Color(0xFF66FCF1).withOpacity(0.08)
+              ? const Color(0xFF66FCF1).withValues(alpha:0.08)
               : Colors.transparent,
         ),
         child: Column(
@@ -150,12 +150,12 @@ class _NavItem extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isSelected
-                    ? const Color(0xFF66FCF1).withOpacity(0.12)
+                    ? const Color(0xFF66FCF1).withValues(alpha:0.12)
                     : Colors.transparent,
                 boxShadow: isSelected
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF66FCF1).withOpacity(0.15),
+                          color: const Color(0xFF66FCF1).withValues(alpha:0.15),
                           blurRadius: 6,
                           spreadRadius: 0,
                         ),
@@ -167,7 +167,7 @@ class _NavItem extends StatelessWidget {
                 size: isSelected ? 18 : 16,
                 color: isSelected
                     ? const Color(0xFF66FCF1)
-                    : Colors.white.withOpacity(0.35),
+                    : Colors.white.withValues(alpha:0.35),
               ),
             ),
             const SizedBox(height: 3),
@@ -178,7 +178,7 @@ class _NavItem extends StatelessWidget {
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 color: isSelected
                     ? const Color(0xFF66FCF1)
-                    : Colors.white.withOpacity(0.35),
+                    : Colors.white.withValues(alpha:0.35),
                 letterSpacing: 0.1,
                 height: 1.0,
               ),

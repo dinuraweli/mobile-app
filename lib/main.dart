@@ -4,13 +4,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:telephony/telephony.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'screens/biometric_lock_screen.dart';
 import 'screens/main_navigation.dart';
 import 'screens/auth_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'utils/sms_validator.dart';
 import 'services/database_service.dart';
 import 'services/auth_service.dart';
 import 'services/financial_config_service.dart';
 import 'models/user.dart';
+import 'services/merchant_database.dart';
 
 @pragma('vm:entry-point')
 Future<void> backgroundMessageHandler(SmsMessage message) async {
@@ -18,17 +22,20 @@ Future<void> backgroundMessageHandler(SmsMessage message) async {
 
   if (SmsValidator.isBankTransaction(message.address, message.body)) {
     debugPrint("Valid Bank SMS caught in background. Saving to Hive...");
-    
-    await Hive.initFlutter();
-    var box = await Hive.openBox<String>('pending_sms');
-    await box.add(message.body ?? '');
-    
-    debugPrint("Saved successfully!");
+    try {
+      await Hive.initFlutter();
+      var box = await Hive.openBox<String>('pending_sms');
+      await box.add(message.body ?? '');
+      debugPrint("Saved successfully!");
+    } catch (e) {
+      debugPrint("⚠️ Background SMS save failed: $e");
+    }
   }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MerchantDatabase.initialize();
   
   await Firebase.initializeApp();
   await Hive.initFlutter();
@@ -38,7 +45,6 @@ void main() async {
   
   runApp(const SalliMateApp());
 }
-
 class SalliMateApp extends StatefulWidget {
   const SalliMateApp({super.key});
 
@@ -49,52 +55,54 @@ class SalliMateApp extends StatefulWidget {
 class _SalliMateAppState extends State<SalliMateApp> {
   AppUser? _currentUser;
   bool _isCheckingAuth = true;
+  bool _hasSeenOnboarding = true; // assume true until prefs are loaded
+  bool _isBiometricUnlocked = false;
 
   @override
   void initState() {
     super.initState();
     _checkAuthStatus();
-    _testFinancialConfig(); // TEMPORARY - remove after testing
   }
 
   Future<void> _checkAuthStatus() async {
-    final authService = AuthService();
-    final loggedInUser = await authService.checkLoggedInUser();
-    
+    final results = await Future.wait([
+      AuthService().checkLoggedInUser(),
+      SharedPreferences.getInstance(),
+    ]);
+
+    final loggedInUser = results[0] as AppUser?;
+    final prefs = results[1] as SharedPreferences;
+
     if (mounted) {
       setState(() {
         _currentUser = loggedInUser;
+        _hasSeenOnboarding = prefs.getBool('has_seen_onboarding') ?? false;
         _isCheckingAuth = false;
       });
     }
   }
 
-  // TEMPORARY - Remove after testing
-  Future<void> _testFinancialConfig() async {
-    await Future.delayed(const Duration(seconds: 3));
-    
-    try {
-      final configService = FinancialConfigService();
-      final config = await configService.getConfig();
-      
-      debugPrint('═══════════════════════════════════');
-      debugPrint('📊 FINANCIAL CONFIG TEST');
-      debugPrint('═══════════════════════════════════');
-      debugPrint('Version: ${config.version}');
-      debugPrint('Source: ${config.sourceLabel}');
-      debugPrint('Tax-Free Allowance: ${config.taxFreeAllowance}');
-      debugPrint('Tax Brackets: ${config.taxBrackets.length} brackets');
-      debugPrint('EPF Employee Rate: ${config.epfEmployeeRate}');
-      debugPrint('Banks: ${config.bankLeasingRates.keys.toList()}');
-      debugPrint('═══════════════════════════════════');
-    } catch (e) {
-      debugPrint('❌ Config test failed: $e');
-    }
+  void _onOnboardingComplete() {
+    setState(() => _hasSeenOnboarding = true);
+  }
+
+  void _onBiometricUnlocked() {
+    setState(() => _isBiometricUnlocked = true);
+  }
+
+  void _onUsePassword() async {
+    // Sign out so the user must re-authenticate with email/password
+    if (_currentUser != null) await AuthService().logout(_currentUser!);
+    setState(() {
+      _currentUser = null;
+      _isBiometricUnlocked = false;
+    });
   }
 
   void _onLoginSuccess(AppUser user) {
     setState(() {
       _currentUser = user;
+      _isBiometricUnlocked = false; // re-arm lock for next session
     });
   }
 
@@ -104,6 +112,7 @@ class _SalliMateAppState extends State<SalliMateApp> {
     }
     setState(() {
       _currentUser = null;
+      _isBiometricUnlocked = false;
     });
   }
 
@@ -163,9 +172,16 @@ class _SalliMateAppState extends State<SalliMateApp> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         ),
       ),
-      home: _currentUser != null
-          ? MainNavigation(currentUser: _currentUser!, onLogout: _onLogout)
-          : AuthScreen(onLoginSuccess: _onLoginSuccess),
+      home: !_hasSeenOnboarding
+          ? OnboardingScreen(onComplete: _onOnboardingComplete)
+          : _currentUser != null
+              ? (_currentUser!.isBiometricEnabled && !_isBiometricUnlocked
+                  ? BiometricLockScreen(
+                      onUnlocked: _onBiometricUnlocked,
+                      onUsePassword: _onUsePassword,
+                    )
+                  : MainNavigation(currentUser: _currentUser!, onLogout: _onLogout))
+              : AuthScreen(onLoginSuccess: _onLoginSuccess),
     );
   }
 }

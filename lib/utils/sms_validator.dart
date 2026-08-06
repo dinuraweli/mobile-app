@@ -19,7 +19,7 @@ class SmsValidator {
     bool isBankSender = allowedBankSenders.any((bank) => lowerSender.contains(bank));
 
     // 2. Check for transaction-specific keywords
-    final transactionKeywords = ['debited', 'credited', 'payment', 'transfer', 'lkr', 'rs', 'purchase', 'withdrawal', 'deposit' 'transaction approved', 'transaction', 'purchase',];
+    final transactionKeywords = ['debited', 'credited', 'payment', 'transfer', 'lkr', 'rs', 'purchase', 'withdrawal', 'deposit', 'transaction approved', 'transaction'];
     bool hasTransactionKeyword = transactionKeywords.any((keyword) => lowerBody.contains(keyword));
 
     // 3. Filter out promotional messages to save Gemini quota

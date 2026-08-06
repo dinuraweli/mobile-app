@@ -15,11 +15,16 @@ class SpendingBarChart extends StatelessWidget {
       orderedData[day] = dailySpending[day] ?? 0.0;
     }
 
-    final maxSpending = orderedData.values.reduce((a, b) => a > b ? a : b);
     final total = orderedData.values.fold(0.0, (sum, v) => sum + v);
+    final hasAnySpending = total > 0;
+    final maxSpending = hasAnySpending
+        ? orderedData.values.reduce((a, b) => a > b ? a : b)
+        : 0.0;
     final average = total / 7;
-    
-    final highestEntry = orderedData.entries.reduce((a, b) => a.value > b.value ? a : b);
+
+    final highestEntry = hasAnySpending
+        ? orderedData.entries.reduce((a, b) => a.value > b.value ? a : b)
+        : null;
     final nonZero = orderedData.entries.where((e) => e.value > 0).toList();
     final lowestEntry = nonZero.isNotEmpty
         ? nonZero.reduce((a, b) => a.value < b.value ? a : b)
@@ -42,16 +47,19 @@ class SpendingBarChart extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.03),
+            color: Colors.white.withValues(alpha:0.03),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStat('Highest', highestEntry.key, _fmt(highestEntry.value), const Color(0xFF66FCF1)),
+              if (highestEntry != null)
+                _buildStat('Highest', highestEntry.key, _fmt(highestEntry.value), const Color(0xFF66FCF1)),
               if (lowestEntry != null)
                 _buildStat('Lowest', lowestEntry.key, _fmt(lowestEntry.value), const Color(0xFF4CAF50)),
               _buildStat('Avg/Day', '', _fmt(average), const Color(0xFFFFA726)),
+              if (!hasAnySpending)
+                const Text('No spending this week', style: TextStyle(color: Colors.white38, fontSize: 12)),
             ],
           ),
         ),
@@ -69,7 +77,7 @@ class SpendingBarChart extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: steps.reversed.map((v) => Text(
           NumberFormat.compact().format(v),
-          style: TextStyle(color: Colors.white.withOpacity(0.25), fontSize: 9, fontWeight: FontWeight.w500),
+          style: TextStyle(color: Colors.white.withValues(alpha:0.25), fontSize: 9, fontWeight: FontWeight.w500),
         )).toList(),
       ),
     );
@@ -118,7 +126,7 @@ class SpendingBarChart extends StatelessWidget {
           height: hasValue ? height : 3,
           width: barW,
           decoration: BoxDecoration(
-            color: hasValue ? const Color(0xFF66FCF1).withOpacity(isHighest ? 0.9 : 0.45) : Colors.white.withOpacity(0.06),
+            color: hasValue ? const Color(0xFF66FCF1).withValues(alpha:isHighest ? 0.9 : 0.45) : Colors.white.withValues(alpha:0.06),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
           ),
         ),
@@ -127,7 +135,7 @@ class SpendingBarChart extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: isHighest ? Colors.white : Colors.white.withOpacity(0.35),
+            color: isHighest ? Colors.white : Colors.white.withValues(alpha:0.35),
             fontSize: 10,
             fontWeight: isHighest ? FontWeight.w700 : FontWeight.w400,
           ),
@@ -142,9 +150,9 @@ class SpendingBarChart extends StatelessWidget {
       children: [
         Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13)),
         const SizedBox(height: 1),
-        Text(label, style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 10)),
+        Text(label, style: TextStyle(color: Colors.white.withValues(alpha:0.4), fontSize: 10)),
         if (detail.isNotEmpty)
-          Text(detail, style: TextStyle(color: Colors.white.withOpacity(0.2), fontSize: 9)),
+          Text(detail, style: TextStyle(color: Colors.white.withValues(alpha:0.2), fontSize: 9)),
       ],
     );
   }

@@ -1,6 +1,7 @@
 // File: lib/services/database_service.dart
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import '../models/budget.dart';
 import '../models/transaction.dart';
 import '../models/user.dart';
 
@@ -17,7 +18,7 @@ class DatabaseService {
     
     final dir = await getApplicationDocumentsDirectory();
     isar = await Isar.open(
-      [AppTransactionSchema, AppUserSchema],
+      [AppTransactionSchema, AppUserSchema, BudgetSchema],
       directory: dir.path,
       inspector: true,
     );
@@ -191,6 +192,33 @@ class DatabaseService {
     return await isar.appTransactions.count();
   }
   
+  // ==================== BUDGET OPERATIONS ====================
+
+  Future<List<Budget>> getBudgetsForUser(int userId) async {
+    return await isar.budgets.filter().userIdEqualTo(userId).findAll();
+  }
+
+  Future<Budget?> getBudgetForCategory(int userId, String category) async {
+    return await isar.budgets
+        .filter()
+        .userIdEqualTo(userId)
+        .and()
+        .categoryEqualTo(category)
+        .findFirst();
+  }
+
+  Future<void> saveBudget(Budget budget) async {
+    await isar.writeTxn(() async {
+      await isar.budgets.put(budget);
+    });
+  }
+
+  Future<void> deleteBudget(int id) async {
+    await isar.writeTxn(() async {
+      await isar.budgets.delete(id);
+    });
+  }
+
   // ==================== USER OPERATIONS ====================
   
   Future<int> saveUser(AppUser user) async {
@@ -206,25 +234,8 @@ class DatabaseService {
         .findFirst();
   }
   
-  Future<AppUser?> getLoggedInUser() async {
-    return await isar.appUsers
-        .filter()
-        .isLoggedInEqualTo(true)
-        .findFirst();
-  }
-  
   Future<List<AppUser>> getAllUsers() async {
     return await isar.appUsers.where().findAll();
-  }
-  
-  Future<void> logoutAllUsers() async {
-    final users = await isar.appUsers.filter().isLoggedInEqualTo(true).findAll();
-    for (var user in users) {
-      user.isLoggedIn = false;
-    }
-    await isar.writeTxn(() async {
-      await isar.appUsers.putAll(users);
-    });
   }
   
   Future<void> updateUser(AppUser user) async {

@@ -82,9 +82,9 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF66FCF1).withOpacity(0.1),
+                  color: const Color(0xFF66FCF1).withValues(alpha:0.1),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFF66FCF1).withOpacity(0.2)),
+                  border: Border.all(color: const Color(0xFF66FCF1).withValues(alpha:0.2)),
                 ),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -132,7 +132,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF1A1A2E),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha:0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -141,7 +141,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: const Color(0xFF66FCF1).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: const Color(0xFF66FCF1).withValues(alpha:0.1), borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.edit_note_rounded, color: Color(0xFF66FCF1), size: 22),
               ),
               const SizedBox(width: 12),
@@ -159,12 +159,12 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: const Color(0xFF66FCF1).withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: const Color(0xFF66FCF1).withValues(alpha:0.05), borderRadius: BorderRadius.circular(12)),
             child: Row(
               children: [
                 const Icon(Icons.info_outline, color: Color(0xFF66FCF1), size: 18),
                 const SizedBox(width: 8),
-                Expanded(child: Text('Tax-free allowance: Rs. 1,800,000/year (Rs. 150,000/month)', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12))),
+                Expanded(child: Text('Tax-free allowance: Rs. 1,800,000/year (Rs. 150,000/month)', style: TextStyle(color: Colors.white.withValues(alpha:0.6), fontSize: 12))),
               ],
             ),
           ),
@@ -181,8 +181,8 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+        hintStyle: TextStyle(color: Colors.white.withValues(alpha:0.25)),
+        labelStyle: TextStyle(color: Colors.white.withValues(alpha:0.5)),
         filled: true,
         fillColor: const Color(0xFF0B0C10),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
@@ -212,13 +212,13 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     final result = _result!;
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Salary Breakdown', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text('Total Monthly Earnings: LKR ${NumberFormat('#,##0.00').format(result.totalMonthlyEarnings)}', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13)),
+          Text('Total Monthly Earnings: LKR ${NumberFormat('#,##0.00').format(result.totalMonthlyEarnings)}', style: TextStyle(color: Colors.white.withValues(alpha:0.5), fontSize: 13)),
           const SizedBox(height: 20),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
@@ -259,7 +259,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
           Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
         ]),
         const SizedBox(height: 4),
-        Text('LKR ${NumberFormat.compact().format(amount)} ($percentage)', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
+        Text('LKR ${NumberFormat.compact().format(amount)} ($percentage)', style: TextStyle(color: Colors.white.withValues(alpha:0.5), fontSize: 11)),
       ],
     );
   }
@@ -287,7 +287,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: const Color(0xFF66FCF1).withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF66FCF1).withOpacity(0.1))),
+          decoration: BoxDecoration(color: const Color(0xFF66FCF1).withValues(alpha:0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFF66FCF1).withValues(alpha:0.1))),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -313,15 +313,15 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 16)),
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)), child: Icon(icon, color: color, size: 16)),
             const SizedBox(height: 12),
             Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 2),
-            Text(label, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11)),
+            Text(label, style: TextStyle(color: Colors.white.withValues(alpha:0.5), fontSize: 11)),
           ],
         ),
       ),
@@ -330,7 +330,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
 
   Widget _buildEmployerItem(String label, double amount, {bool isTotal = false}) {
     return Column(children: [
-      Text(label, style: TextStyle(color: Colors.white.withOpacity(isTotal ? 1 : 0.5), fontSize: 11, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal)),
+      Text(label, style: TextStyle(color: Colors.white.withValues(alpha:isTotal ? 1 : 0.5), fontSize: 11, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal)),
       const SizedBox(height: 2),
       Text('LKR ${NumberFormat('#,##0').format(amount)}', style: TextStyle(color: const Color(0xFF66FCF1), fontWeight: FontWeight.bold, fontSize: isTotal ? 15 : 13)),
     ]);
@@ -342,13 +342,13 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     final result = _result!;
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text('Tax Calculation Breakdown', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          Text('Based on IRD rates effective April 2025', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11)),
+          Text('Based on IRD rates effective April 2025', style: TextStyle(color: Colors.white.withValues(alpha:0.4), fontSize: 11)),
           const SizedBox(height: 16),
           _buildInfoRow('Annual Gross Salary', 'LKR ${NumberFormat('#,##0.00').format(result.annualGrossSalary)}'),
           _buildInfoRow('Less: EPF Contribution (8%)', 'LKR ${NumberFormat('#,##0.00').format(result.annualEpfEmployee)}'),
@@ -379,7 +379,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Expanded(flex: 3, child: Text(label, style: TextStyle(color: Colors.white.withOpacity(isHighlighted ? 1 : 0.6), fontSize: 13, fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.normal))),
+        Expanded(flex: 3, child: Text(label, style: TextStyle(color: Colors.white.withValues(alpha:isHighlighted ? 1 : 0.6), fontSize: 13, fontWeight: isHighlighted ? FontWeight.w600 : FontWeight.normal))),
         Text(value, style: TextStyle(color: color ?? (isHighlighted ? const Color(0xFF66FCF1) : Colors.white), fontSize: 13, fontWeight: isHighlighted ? FontWeight.bold : FontWeight.normal)),
       ]),
     );
@@ -392,9 +392,9 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [const Color(0xFF66FCF1).withOpacity(0.1), const Color(0xFF45A29E).withOpacity(0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: LinearGradient(colors: [const Color(0xFF66FCF1).withValues(alpha:0.1), const Color(0xFF45A29E).withValues(alpha:0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF66FCF1).withOpacity(0.15)),
+        border: Border.all(color: const Color(0xFF66FCF1).withValues(alpha:0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,7 +422,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: TextStyle(color: Colors.white.withOpacity(isTotal ? 1 : 0.7), fontSize: 13, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal)),
+        Text(label, style: TextStyle(color: Colors.white.withValues(alpha:isTotal ? 1 : 0.7), fontSize: 13, fontWeight: isTotal ? FontWeight.bold : FontWeight.normal)),
         Text('LKR ${NumberFormat('#,##0.00').format(amount)}', style: TextStyle(color: isDeduction ? const Color(0xFFEF5350) : (isTotal ? const Color(0xFF66FCF1) : Colors.white), fontWeight: FontWeight.bold, fontSize: 13)),
       ]),
     );
@@ -433,17 +433,17 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
   Widget _buildEpfEtfInfo() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF66FCF1).withOpacity(0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.info_outline, color: Color(0xFF66FCF1), size: 18)),
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: const Color(0xFF66FCF1).withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)), child: const Icon(Icons.info_outline, color: Color(0xFF66FCF1), size: 18)),
             const SizedBox(width: 10),
             const Text('About EPF & ETF', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
           ]),
           const SizedBox(height: 16),
-          Text('The Employees\' Provident Fund (EPF) and Employees\' Trust Fund (ETF) are mandatory social security schemes established by the Government of Sri Lanka. They provide financial security and retirement benefits to employees in the formal sector.', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13, height: 1.6)),
+          Text('The Employees\' Provident Fund (EPF) and Employees\' Trust Fund (ETF) are mandatory social security schemes established by the Government of Sri Lanka. They provide financial security and retirement benefits to employees in the formal sector.', style: TextStyle(color: Colors.white.withValues(alpha:0.7), fontSize: 13, height: 1.6)),
           const SizedBox(height: 16),
           _buildInfoPoint('Employee EPF Contribution', '8% of your total monthly earnings is deducted and contributed to your EPF account. This is a compulsory savings mechanism for your retirement.'),
           const SizedBox(height: 12),
@@ -465,7 +465,7 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
       const SizedBox(width: 10),
       Expanded(child: RichText(text: TextSpan(children: [
         TextSpan(text: '$title: ', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-        TextSpan(text: description, style: TextStyle(color: Colors.white.withOpacity(0.65), fontSize: 13, height: 1.5)),
+        TextSpan(text: description, style: TextStyle(color: Colors.white.withValues(alpha:0.65), fontSize: 13, height: 1.5)),
       ]))),
     ]);
   }
@@ -475,14 +475,14 @@ class _TaxCalculatorScreenState extends State<TaxCalculatorScreen> {
   Widget _buildDisclaimer() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: const Color(0xFFFFA726).withOpacity(0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFFA726).withOpacity(0.15))),
+      decoration: BoxDecoration(color: const Color(0xFFFFA726).withValues(alpha:0.05), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFFA726).withValues(alpha:0.15))),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Icon(Icons.warning_amber_rounded, color: Color(0xFFFFA726), size: 20),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Text('Disclaimer', style: TextStyle(color: Color(0xFFFFA726), fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 4),
-          Text('This calculator is based on the Sri Lanka Inland Revenue Department regulations for the 2025/2026 year of assessment. While every effort has been made to ensure accuracy, this tool is for informational purposes only. For professional tax advice tailored to your situation, please consult a qualified tax professional.', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11, height: 1.5)),
+          Text('This calculator is based on the Sri Lanka Inland Revenue Department regulations for the 2025/2026 year of assessment. While every effort has been made to ensure accuracy, this tool is for informational purposes only. For professional tax advice tailored to your situation, please consult a qualified tax professional.', style: TextStyle(color: Colors.white.withValues(alpha:0.6), fontSize: 11, height: 1.5)),
         ])),
       ]),
     );

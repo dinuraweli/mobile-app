@@ -47,33 +47,23 @@ const AppUserSchema = CollectionSchema(
       name: r'isBiometricEnabled',
       type: IsarType.bool,
     ),
-    r'isLoggedIn': PropertySchema(
-      id: 6,
-      name: r'isLoggedIn',
-      type: IsarType.bool,
-    ),
     r'lastLogin': PropertySchema(
-      id: 7,
+      id: 6,
       name: r'lastLogin',
       type: IsarType.dateTime,
     ),
     r'monthlySalary': PropertySchema(
-      id: 8,
+      id: 7,
       name: r'monthlySalary',
       type: IsarType.string,
     ),
     r'name': PropertySchema(
-      id: 9,
+      id: 8,
       name: r'name',
       type: IsarType.string,
     ),
-    r'passwordHash': PropertySchema(
-      id: 10,
-      name: r'passwordHash',
-      type: IsarType.string,
-    ),
     r'tinNumber': PropertySchema(
-      id: 11,
+      id: 9,
       name: r'tinNumber',
       type: IsarType.string,
     )
@@ -138,7 +128,6 @@ int _appUserEstimateSize(
     }
   }
   bytesCount += 3 + object.name.length * 3;
-  bytesCount += 3 + object.passwordHash.length * 3;
   {
     final value = object.tinNumber;
     if (value != null) {
@@ -160,12 +149,10 @@ void _appUserSerialize(
   writer.writeString(offsets[3], object.employmentType);
   writer.writeString(offsets[4], object.epfNumber);
   writer.writeBool(offsets[5], object.isBiometricEnabled);
-  writer.writeBool(offsets[6], object.isLoggedIn);
-  writer.writeDateTime(offsets[7], object.lastLogin);
-  writer.writeString(offsets[8], object.monthlySalary);
-  writer.writeString(offsets[9], object.name);
-  writer.writeString(offsets[10], object.passwordHash);
-  writer.writeString(offsets[11], object.tinNumber);
+  writer.writeDateTime(offsets[6], object.lastLogin);
+  writer.writeString(offsets[7], object.monthlySalary);
+  writer.writeString(offsets[8], object.name);
+  writer.writeString(offsets[9], object.tinNumber);
 }
 
 AppUser _appUserDeserialize(
@@ -181,12 +168,10 @@ AppUser _appUserDeserialize(
     epfNumber: reader.readStringOrNull(offsets[4]),
     id: id,
     isBiometricEnabled: reader.readBoolOrNull(offsets[5]) ?? false,
-    isLoggedIn: reader.readBoolOrNull(offsets[6]) ?? false,
-    lastLogin: reader.readDateTimeOrNull(offsets[7]),
-    monthlySalary: reader.readStringOrNull(offsets[8]),
-    name: reader.readString(offsets[9]),
-    passwordHash: reader.readString(offsets[10]),
-    tinNumber: reader.readStringOrNull(offsets[11]),
+    lastLogin: reader.readDateTimeOrNull(offsets[6]),
+    monthlySalary: reader.readStringOrNull(offsets[7]),
+    name: reader.readString(offsets[8]),
+    tinNumber: reader.readStringOrNull(offsets[9]),
   );
   object.createdAt = reader.readDateTime(offsets[1]);
   return object;
@@ -212,16 +197,12 @@ P _appUserDeserializeProp<P>(
     case 5:
       return (reader.readBoolOrNull(offset) ?? false) as P;
     case 6:
-      return (reader.readBoolOrNull(offset) ?? false) as P;
-    case 7:
       return (reader.readDateTimeOrNull(offset)) as P;
-    case 8:
+    case 7:
       return (reader.readStringOrNull(offset)) as P;
+    case 8:
+      return (reader.readString(offset)) as P;
     case 9:
-      return (reader.readString(offset)) as P;
-    case 10:
-      return (reader.readString(offset)) as P;
-    case 11:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1103,16 +1084,6 @@ extension AppUserQueryFilter
     });
   }
 
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> isLoggedInEqualTo(
-      bool value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'isLoggedIn',
-        value: value,
-      ));
-    });
-  }
-
   QueryBuilder<AppUser, AppUser, QAfterFilterCondition> lastLoginIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -1461,137 +1432,6 @@ extension AppUserQueryFilter
     });
   }
 
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashEqualTo(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'passwordHash',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashGreaterThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'passwordHash',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashLessThan(
-    String value, {
-    bool include = false,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'passwordHash',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashBetween(
-    String lower,
-    String upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'passwordHash',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashStartsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.startsWith(
-        property: r'passwordHash',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashEndsWith(
-    String value, {
-    bool caseSensitive = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.endsWith(
-        property: r'passwordHash',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashContains(
-      String value,
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.contains(
-        property: r'passwordHash',
-        value: value,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.matches(
-        property: r'passwordHash',
-        wildcard: pattern,
-        caseSensitive: caseSensitive,
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition> passwordHashIsEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'passwordHash',
-        value: '',
-      ));
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterFilterCondition>
-      passwordHashIsNotEmpty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        property: r'passwordHash',
-        value: '',
-      ));
-    });
-  }
-
   QueryBuilder<AppUser, AppUser, QAfterFilterCondition> tinNumberIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -1818,18 +1658,6 @@ extension AppUserQuerySortBy on QueryBuilder<AppUser, AppUser, QSortBy> {
     });
   }
 
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> sortByIsLoggedIn() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isLoggedIn', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> sortByIsLoggedInDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isLoggedIn', Sort.desc);
-    });
-  }
-
   QueryBuilder<AppUser, AppUser, QAfterSortBy> sortByLastLogin() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastLogin', Sort.asc);
@@ -1863,18 +1691,6 @@ extension AppUserQuerySortBy on QueryBuilder<AppUser, AppUser, QSortBy> {
   QueryBuilder<AppUser, AppUser, QAfterSortBy> sortByNameDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> sortByPasswordHash() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'passwordHash', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> sortByPasswordHashDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'passwordHash', Sort.desc);
     });
   }
 
@@ -1977,18 +1793,6 @@ extension AppUserQuerySortThenBy
     });
   }
 
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> thenByIsLoggedIn() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isLoggedIn', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> thenByIsLoggedInDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'isLoggedIn', Sort.desc);
-    });
-  }
-
   QueryBuilder<AppUser, AppUser, QAfterSortBy> thenByLastLogin() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastLogin', Sort.asc);
@@ -2022,18 +1826,6 @@ extension AppUserQuerySortThenBy
   QueryBuilder<AppUser, AppUser, QAfterSortBy> thenByNameDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.desc);
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> thenByPasswordHash() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'passwordHash', Sort.asc);
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QAfterSortBy> thenByPasswordHashDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'passwordHash', Sort.desc);
     });
   }
 
@@ -2093,12 +1885,6 @@ extension AppUserQueryWhereDistinct
     });
   }
 
-  QueryBuilder<AppUser, AppUser, QDistinct> distinctByIsLoggedIn() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'isLoggedIn');
-    });
-  }
-
   QueryBuilder<AppUser, AppUser, QDistinct> distinctByLastLogin() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'lastLogin');
@@ -2117,13 +1903,6 @@ extension AppUserQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'name', caseSensitive: caseSensitive);
-    });
-  }
-
-  QueryBuilder<AppUser, AppUser, QDistinct> distinctByPasswordHash(
-      {bool caseSensitive = true}) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'passwordHash', caseSensitive: caseSensitive);
     });
   }
 
@@ -2179,12 +1958,6 @@ extension AppUserQueryProperty
     });
   }
 
-  QueryBuilder<AppUser, bool, QQueryOperations> isLoggedInProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'isLoggedIn');
-    });
-  }
-
   QueryBuilder<AppUser, DateTime?, QQueryOperations> lastLoginProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'lastLogin');
@@ -2200,12 +1973,6 @@ extension AppUserQueryProperty
   QueryBuilder<AppUser, String, QQueryOperations> nameProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'name');
-    });
-  }
-
-  QueryBuilder<AppUser, String, QQueryOperations> passwordHashProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'passwordHash');
     });
   }
 

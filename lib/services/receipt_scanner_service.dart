@@ -109,7 +109,7 @@ class ReceiptScannerService {
     }
 
     final model = GenerativeModel(
-      model: 'gemini-3.1-flash-lite', // Use Flash for faster, cheaper vision
+      model: 'gemini-2.5-flash',
       apiKey: ApiConfig.geminiApiKey,
       systemInstruction: Content.system('''
 You are a Sri Lankan receipt scanner. Extract purchase details from receipt images with HIGH accuracy.
@@ -345,14 +345,12 @@ If the receipt is unreadable, return:
   // ==================== BATCH SCANNING ====================
   
   /// Scan multiple receipts at once
-  Future<List<ReceiptScanResult>> scanMultipleReceipts(List<File> images) async {
+  Future<List<ReceiptScanResult>> scanMultipleReceipts(List<File> images, {required int userId}) async {
     final List<ReceiptScanResult> results = [];
-    
     for (var image in images) {
-      final result = await scanReceipt(image, userId: 0); // Default userId for batch
+      final result = await scanReceipt(image, userId: userId);
       results.add(result);
     }
-    
     return results;
   }
 }

@@ -21,6 +21,8 @@ class AppTransaction {
   late String accountType;
   late String accountMask;
   double? availableBalance;
+  String? foreignCurrency;
+  double? foreignAmount;
 
   @Index()
   late DateTime createdAt;
@@ -82,6 +84,8 @@ class AppTransaction {
     this.accountType = 'Unknown',
     this.accountMask = '',
     this.availableBalance,
+    this.foreignCurrency,
+    this.foreignAmount,
     required this.createdAt,
     this.source = 'manual',
     this.smsRawText,
@@ -102,13 +106,15 @@ class AppTransaction {
     String accountType = 'Unknown',
     String accountMask = '',
     double? availableBalance,
+    String? foreignCurrency,
+    double? foreignAmount,
     String source = 'manual',
     String? smsRawText,
     double? aiConfidence,
     DateTime? createdAt,
   }) {
     return AppTransaction(
-      transactionId: DateTime.now().millisecondsSinceEpoch.toString(),
+      transactionId: '${userId}_${DateTime.now().microsecondsSinceEpoch}',
       userId: userId,
       bank: bank,
       bankName: bankName.isEmpty ? bank : bankName,
@@ -120,6 +126,8 @@ class AppTransaction {
       accountType: accountType,
       accountMask: accountMask,
       availableBalance: availableBalance,
+      foreignCurrency: foreignCurrency,
+      foreignAmount: foreignAmount,
       createdAt: createdAt ?? DateTime.now(),
       source: source,
       smsRawText: smsRawText,
@@ -140,6 +148,8 @@ class AppTransaction {
         'accountType': accountType,
         'accountMask': accountMask,
         'availableBalance': availableBalance,
+        'foreignCurrency': foreignCurrency,
+        'foreignAmount': foreignAmount,
         'source': source,
       };
 
@@ -156,6 +166,10 @@ class AppTransaction {
         accountMask: json['accountMask']?.toString() ?? '',
         availableBalance: json['availableBalance'] != null
             ? double.tryParse(json['availableBalance'].toString())
+            : null,
+        foreignCurrency: json['foreignCurrency']?.toString(),
+        foreignAmount: json['foreignAmount'] != null
+            ? double.tryParse(json['foreignAmount'].toString())
             : null,
         source: json['source']?.toString() ?? 'manual',
       );

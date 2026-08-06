@@ -49,7 +49,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         month: widget.month,
         year: widget.year,
       );
-      _total = _transactions.fold(0.0, (sum, t) => sum + t.amount);
+      _total = _transactions.where((t) => t.isDebit).fold(0.0, (sum, t) => sum + t.amount);
     } catch (e) {
       debugPrint('Error loading category: $e');
     }
@@ -84,7 +84,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           : _transactions.isEmpty
               ? Center(
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Icon(Icons.receipt_long_rounded, size: 64, color: Colors.white.withOpacity(0.1)),
+                    Icon(Icons.receipt_long_rounded, size: 64, color: Colors.white.withValues(alpha:0.1)),
                     const SizedBox(height: 16),
                     Text('No ${widget.displayName} transactions', style: const TextStyle(color: Colors.white38, fontSize: 16)),
                     const SizedBox(height: 4),
@@ -98,13 +98,13 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: widget.color.withOpacity(0.08),
-                        border: Border(bottom: BorderSide(color: widget.color.withOpacity(0.2))),
+                        color: widget.color.withValues(alpha:0.08),
+                        border: Border(bottom: BorderSide(color: widget.color.withValues(alpha:0.2))),
                       ),
                       child: Column(children: [
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: widget.color.withOpacity(0.1), shape: BoxShape.circle),
+                          decoration: BoxDecoration(color: widget.color.withValues(alpha:0.1), shape: BoxShape.circle),
                           child: Icon(widget.icon, color: widget.color, size: 28),
                         ),
                         const SizedBox(height: 12),
@@ -115,7 +115,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '${_transactions.length} transaction${_transactions.length == 1 ? '' : 's'} in $monthName',
-                          style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 13),
+                          style: TextStyle(color: Colors.white.withValues(alpha:0.5), fontSize: 13),
                         ),
                       ]),
                     ),
@@ -132,12 +132,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF1A1A2E),
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: Colors.white.withOpacity(0.05)),
+                              border: Border.all(color: Colors.white.withValues(alpha:0.05)),
                             ),
                             child: Row(children: [
                               Container(
                                 width: 42, height: 42,
-                                decoration: BoxDecoration(color: widget.color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                                decoration: BoxDecoration(color: widget.color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
                                 child: Icon(_getIcon(t.category), color: widget.color, size: 20),
                               ),
                               const SizedBox(width: 12),
@@ -147,7 +147,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
                                   const SizedBox(height: 2),
                                   Text(
                                     DateFormat('MMM d, yyyy').format(t.createdAt),
-                                    style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 11),
+                                    style: TextStyle(color: Colors.white.withValues(alpha:0.4), fontSize: 11),
                                   ),
                                 ]),
                               ),

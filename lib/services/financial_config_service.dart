@@ -33,7 +33,7 @@ class FinancialConfigService {
       });
       await _remoteConfig!.setConfigSettings(RemoteConfigSettings(
         fetchTimeout: const Duration(seconds: 10),
-        minimumFetchInterval: Duration.zero,
+        minimumFetchInterval: const Duration(hours: 12),
       ));
     } catch (e) {
       debugPrint('Firebase Remote Config not available: $e');

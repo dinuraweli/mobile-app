@@ -211,10 +211,16 @@ class AnalyticsService {
 
   // ==================== SMART INSIGHTS ====================
 
-  Future<List<SmartInsight>> generateInsights({required int userId}) async {
+  Future<List<SmartInsight>> generateInsights({
+    required int userId,
+    MonthlySummary? precomputedSummary,
+    SpendingPrediction? precomputedPrediction,
+    int? month,
+    int? year,
+  }) async {
     List<SmartInsight> insights = [];
-    final summary = await getMonthlySummary(userId: userId);
-    final prediction = await predictMonthlySpending(userId: userId);
+    final summary = precomputedSummary ?? await getMonthlySummary(userId: userId);
+    final prediction = precomputedPrediction ?? await predictMonthlySpending(userId: userId);
 
     if (summary.totalIncome > 0) {
       double savingsRate = (summary.netSavings / summary.totalIncome) * 100;
@@ -256,15 +262,16 @@ class AnalyticsService {
       type: prediction.trend == 'up' ? InsightType.warning : InsightType.positive,
     ));
 
-    // Weekend vs weekday insight
+    // Weekend vs weekday insight — use selected month/year, not always current month
     double weekendSpend = 0;
     double weekdaySpend = 0;
     int weekendDays = 0;
     int weekdayDays = 0;
     final allTxns = await _db.getTransactionsByUserId(userId);
-    final now = DateTime.now();
+    final selectedMonth = month ?? DateTime.now().month;
+    final selectedYear = year ?? DateTime.now().year;
     final monthTxns = allTxns.where((t) =>
-      t.createdAt.month == now.month && t.createdAt.year == now.year && t.isDebit
+      t.createdAt.month == selectedMonth && t.createdAt.year == selectedYear && t.isDebit
     ).toList();
 
     for (var t in monthTxns) {
@@ -289,12 +296,12 @@ class AnalyticsService {
       ));
     }
 
-    // Subscription insight
-    final recurringTxs = allTxns.where((t) => t.isDebit && _isSubscription(t)).toList();
+    // Subscription insight — filter to current month only
+    final recurringTxs = monthTxns.where((t) => t.isDebit && _isSubscription(t)).toList();
     if (recurringTxs.isNotEmpty) {
       final uniqueSubs = <String, double>{};
       for (var t in recurringTxs) {
-        uniqueSubs[t.merchant] = t.amount;
+        uniqueSubs[t.merchant] = (uniqueSubs[t.merchant] ?? 0) + t.amount;
       }
       double monthlySubs = uniqueSubs.values.fold(0.0, (sum, v) => sum + v);
       insights.add(SmartInsight(

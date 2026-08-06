@@ -27,7 +27,12 @@ class TransactionCard extends StatelessWidget {
               const SizedBox(height: 24),
               Center(child: Text(transaction.merchant, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold))),
               const SizedBox(height: 8),
-              Center(child: Text('${isDebit ? '-' : '+'} LKR ${NumberFormat('#,##0.00').format(transaction.amount)}', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: isDebit ? Colors.white : const Color(0xFF66FCF1)))),
+              Center(child: Text(
+                transaction.foreignCurrency != null
+                    ? '${isDebit ? '-' : '+'} ${transaction.foreignCurrency} ${NumberFormat('#,##0.00').format(transaction.foreignAmount ?? 0)}'
+                    : '${isDebit ? '-' : '+'} LKR ${NumberFormat('#,##0.00').format(transaction.amount)}',
+                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: isDebit ? Colors.white : const Color(0xFF66FCF1)),
+              )),
               const SizedBox(height: 24),
               const Divider(color: Colors.white10),
               const SizedBox(height: 16),
@@ -36,6 +41,7 @@ class TransactionCard extends StatelessWidget {
               _buildDetailRow('Bank', transaction.bank),
               _buildDetailRow('Account Type', transaction.accountType),
               if (transaction.accountMask.isNotEmpty) _buildDetailRow('Card/Account Number', maskText),
+              if (transaction.foreignCurrency != null) _buildDetailRow('Foreign Amount', '${transaction.foreignCurrency} ${NumberFormat('#,##0.00').format(transaction.foreignAmount ?? 0)}'),
               _buildDetailRow('Transaction Type', transaction.type),
               const SizedBox(height: 32),
               SizedBox(
@@ -66,7 +72,7 @@ class TransactionCard extends StatelessWidget {
       'Groceries', 'Transport', 'Dining', 'Bills & Utilities', 
       'Recurring Payments', 'Shopping', 'Transfers', 'Income', 'General'
     ];
-    String selCat = catList.contains(transaction.category) ? transaction.category : 'Other';
+    String selCat = catList.contains(transaction.category) ? transaction.category : 'General';
 
     showDialog(
       context: context,
@@ -109,6 +115,8 @@ class TransactionCard extends StatelessWidget {
                   accountType: transaction.accountType,
                   accountMask: transaction.accountMask,
                   availableBalance: transaction.availableBalance,
+                  foreignCurrency: transaction.foreignCurrency,
+                  foreignAmount: transaction.foreignAmount,
                   createdAt: transaction.createdAt,
                   source: transaction.source,
                   smsRawText: transaction.smsRawText,
@@ -149,10 +157,6 @@ class TransactionCard extends StatelessWidget {
       case 'General': default: categoryIcon = Icons.category; break;
     }
 
-    String accString = transaction.accountMask.isNotEmpty ? ' (**${transaction.accountMask})' : '';
-
-    // ... rest of your build method remains exactly the same!
-
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: InkWell(
@@ -187,7 +191,9 @@ class TransactionCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '${transaction.type.toLowerCase() == 'debit' ? '-' : '+'} LKR ${NumberFormat('#,##0').format(transaction.amount)}',
+                transaction.foreignCurrency != null
+                    ? '${transaction.type.toLowerCase() == 'debit' ? '-' : '+'} ${transaction.foreignCurrency} ${NumberFormat('#,##0.##').format(transaction.foreignAmount ?? 0)}'
+                    : '${transaction.type.toLowerCase() == 'debit' ? '-' : '+'} LKR ${NumberFormat('#,##0').format(transaction.amount)}',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: transaction.type.toLowerCase() == 'debit' ? Colors.white : const Color(0xFF66FCF1)),
               ),
             ],

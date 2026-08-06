@@ -3,6 +3,7 @@ import '../models/transaction.dart';
 import '../widgets/balance_summary_card.dart';
 import '../widgets/transaction_card.dart';
 import 'add_transaction_screen.dart';
+import 'budget_screen.dart';
 import 'history_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -84,7 +85,9 @@ class HomeScreen extends StatelessWidget {
                   _buildQuickAction(context, Icons.list_alt, 'History', () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => TransactionHistoryScreen(transactions: transactions, onEdit: onEditTransaction)));
                   }),
-                  _buildQuickAction(context, Icons.account_balance_wallet, 'Budgets', () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Coming soon!')))),
+                  _buildQuickAction(context, Icons.account_balance_wallet, 'Budgets', () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetScreen(userId: userId)));
+                  }),
                 ],
               ),
               const SizedBox(height: 32),

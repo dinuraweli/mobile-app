@@ -50,8 +50,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String _selectedCategory = 'Dining';
   String _selectedType = 'Debit';
   String _selectedAccountType = 'Debit/Account';
-  String _selectedPaymentMethod = 'Cash';
-
   final List<String> _banks = [
     'Commercial Bank', 'BOC', 'Sampath Bank', 'HNB', 
     'NDB', 'HSBC', 'NTB', 'Seylan Bank', 'Cash/Other'
@@ -63,7 +61,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   ];
   
   final List<String> _accountTypes = ['Debit/Account', 'Credit Card'];
-  final List<String> _paymentMethods = ['Cash', 'Card', 'Bank Transfer', 'Other'];
 
   @override
   void dispose() {
@@ -102,7 +99,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       );
       
       final model = GenerativeModel(
-        model: 'gemini-3.5-flash',
+        model: 'gemini-2.5-flash',
         apiKey: ApiConfig.geminiApiKey,
         systemInstruction: systemInstruction,
         generationConfig: GenerationConfig(
@@ -472,7 +469,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.teal.withOpacity(0.1),
+              color: Colors.teal.withValues(alpha:0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Row(
@@ -555,9 +552,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
+                color: Colors.green.withValues(alpha:0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
+                border: Border.all(color: Colors.green.withValues(alpha:0.3)),
               ),
               child: Column(
                 children: [
@@ -736,21 +733,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-
-            // Payment Method
-            DropdownButtonFormField<String>(
-              initialValue: _selectedPaymentMethod,
-              decoration: const InputDecoration(
-                labelText: 'Payment Method',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.payment),
-              ),
-              items: _paymentMethods
-                  .map((p) => DropdownMenuItem(value: p, child: Text(p)))
-                  .toList(),
-              onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
             ),
             const SizedBox(height: 16),
 

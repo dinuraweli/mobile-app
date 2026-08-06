@@ -24,20 +24,20 @@ class BalanceSummaryCard extends StatelessWidget {
             colors: [
               const Color(0xFF1A1A2E),
               const Color(0xFF16213E),
-              const Color(0xFF0F3460).withOpacity(0.8),
+              const Color(0xFF0F3460).withValues(alpha:0.8),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF66FCF1).withOpacity(0.15),
+              color: const Color(0xFF66FCF1).withValues(alpha:0.15),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
           ],
           border: Border.all(
-            color: const Color(0xFF66FCF1).withOpacity(0.1),
+            color: const Color(0xFF66FCF1).withValues(alpha:0.1),
             width: 1,
           ),
         ),
@@ -62,7 +62,7 @@ class BalanceSummaryCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF66FCF1).withOpacity(0.1),
+                      color: const Color(0xFF66FCF1).withValues(alpha:0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Row(
@@ -144,8 +144,8 @@ class BalanceSummaryCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: balance < 0
-                                ? Colors.redAccent.withOpacity(0.6)
-                                : const Color(0xFF66FCF1).withOpacity(0.6),
+                                ? Colors.redAccent.withValues(alpha:0.6)
+                                : const Color(0xFF66FCF1).withValues(alpha:0.6),
                           ),
                         );
                       }).toList(),
@@ -174,9 +174,9 @@ class BalanceSummaryCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha:0.1),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha:0.2)),
         ),
         child: Row(
           children: [
@@ -189,7 +189,7 @@ class BalanceSummaryCard extends StatelessWidget {
                   label,
                   style: TextStyle(
                     fontSize: 11,
-                    color: color.withOpacity(0.8),
+                    color: color.withValues(alpha:0.8),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -213,38 +213,70 @@ class BalanceSummaryCard extends StatelessWidget {
   Map<String, Map<String, dynamic>> _calculateAccountBalances() {
     final Map<String, Map<String, dynamic>> accounts = {};
 
-    for (var t in transactions) {
+    // Process transactions sorted oldest→newest so latest balance wins
+    final sorted = [...transactions]..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    for (var t in sorted) {
       final key = _getAccountKey(t);
-      
+
       if (!accounts.containsKey(key)) {
         accounts[key] = {
-          'balance': 0.0,
+          'calcBalance': 0.0,
           'income': 0.0,
           'expense': 0.0,
           'bank': t.bank,
           'accountMask': t.accountMask,
           'accountType': t.accountType,
+          'latestSmsBalance': null,
+          'latestSmsDate': null,
         };
       }
 
       if (t.isCredit) {
-        accounts[key]!['balance'] = (accounts[key]!['balance'] as double) + t.amount;
+        accounts[key]!['calcBalance'] = (accounts[key]!['calcBalance'] as double) + t.amount;
         accounts[key]!['income'] = (accounts[key]!['income'] as double) + t.amount;
       } else {
-        accounts[key]!['balance'] = (accounts[key]!['balance'] as double) - t.amount;
+        accounts[key]!['calcBalance'] = (accounts[key]!['calcBalance'] as double) - t.amount;
         accounts[key]!['expense'] = (accounts[key]!['expense'] as double) + t.amount;
       }
+
+      // Keep the longest mask as display mask (7603 preferred over 03)
+      final existingMask = accounts[key]!['accountMask'] as String;
+      if (t.accountMask.length > existingMask.length) {
+        accounts[key]!['accountMask'] = t.accountMask;
+      }
+
+      // Track the most recent SMS balance
+      if (t.availableBalance != null) {
+        final existingDate = accounts[key]!['latestSmsDate'] as DateTime?;
+        if (existingDate == null || t.createdAt.isAfter(existingDate)) {
+          accounts[key]!['latestSmsBalance'] = t.availableBalance;
+          accounts[key]!['latestSmsDate'] = t.createdAt;
+        }
+      }
+    }
+
+    // Resolve displayed balance: prefer SMS balance, fall back to calculated
+    for (var key in accounts.keys) {
+      final smsBalance = accounts[key]!['latestSmsBalance'] as double?;
+      accounts[key]!['balance'] = smsBalance ?? accounts[key]!['calcBalance'];
     }
 
     return accounts;
   }
 
   String _getAccountKey(AppTransaction t) {
-    // Group by bank + account mask
     final bank = t.bankShortName;
-    final mask = t.accountMask.isNotEmpty ? t.accountMask : 
-                 (t.accountType == 'Credit Card' ? 'Credit' : 'Other');
-    return '$bank-$mask';
+    final mask = t.accountMask;
+
+    // Use last 2 digits as group key so "7603" and "03" merge into one account
+    String groupMask;
+    if (mask.isEmpty) {
+      groupMask = t.accountType == 'Credit Card' ? 'CC' : 'Other';
+    } else {
+      groupMask = mask.length >= 2 ? mask.substring(mask.length - 2) : mask;
+    }
+    return '$bank-$groupMask';
   }
 
   double _calculateTotal(Map<String, Map<String, dynamic>> accounts, {required bool isIncome}) {
@@ -314,8 +346,8 @@ class BalanceSummaryCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: netBalance >= 0 
-                              ? const Color(0xFF4CAF50).withOpacity(0.1)
-                              : const Color(0xFFEF5350).withOpacity(0.1),
+                              ? const Color(0xFF4CAF50).withValues(alpha:0.1)
+                              : const Color(0xFFEF5350).withValues(alpha:0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -390,7 +422,7 @@ class BalanceSummaryCard extends StatelessWidget {
         color: const Color(0xFF16213E),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha:0.05),
         ),
       ),
       child: Column(
@@ -404,8 +436,8 @@ class BalanceSummaryCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      const Color(0xFF66FCF1).withOpacity(0.2),
-                      const Color(0xFF45A29E).withOpacity(0.1),
+                      const Color(0xFF66FCF1).withValues(alpha:0.2),
+                      const Color(0xFF45A29E).withValues(alpha:0.1),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(12),
@@ -442,7 +474,7 @@ class BalanceSummaryCard extends StatelessWidget {
                           ? '•••• $mask ${isCreditCard ? '(Credit)' : ''}'
                           : type,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: Colors.white.withValues(alpha:0.5),
                         fontSize: 12,
                       ),
                     ),
@@ -469,7 +501,7 @@ class BalanceSummaryCard extends StatelessWidget {
                     isPositive ? 'Balance' : 'Owed',
                     style: TextStyle(
                       fontSize: 10,
-                      color: Colors.white.withOpacity(0.4),
+                      color: Colors.white.withValues(alpha:0.4),
                     ),
                   ),
                 ],
@@ -527,7 +559,7 @@ class BalanceSummaryCard extends StatelessWidget {
           '$label: ${NumberFormat.compact().format(amount)}',
           style: TextStyle(
             fontSize: 11,
-            color: Colors.white.withOpacity(0.6),
+            color: Colors.white.withValues(alpha:0.6),
           ),
         ),
       ],

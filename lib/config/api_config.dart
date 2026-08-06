@@ -1,9 +1,9 @@
 // File: lib/config/api_config.dart
 class ApiConfig {
-  // Replace this with your actual Gemini API key
-  static const String geminiApiKey = 'AIzaSyAbC5HMYjlfpaKlgAnmlKMrldMfvcSwKgA'; // Your key here
-  
-  // Verify key is set
-  static bool get isGeminiConfigured => 
-      geminiApiKey.isNotEmpty && geminiApiKey != 'YOUR_API_KEY_HERE';
+    // Pass at build/run time — never hardcode:
+  //   flutter run --dart-define=GEMINI_API_KEY=your_key_here
+  //   flutter build apk --dart-define=GEMINI_API_KEY=your_key_here
+  static const String geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
+
+  static bool get isGeminiConfigured => geminiApiKey.isNotEmpty;
 }

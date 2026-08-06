@@ -45,17 +45,26 @@ class _InsightsScreenState extends State<InsightsScreen> {
     setState(() => _isLoading = true);
     try {
       final month = _months.indexOf(_selectedMonth) + 1;
-      final results = await Future.wait([
+      final baseResults = await Future.wait([
         _analytics.getMonthlySummary(userId: widget.userId, month: month),
         _analytics.predictMonthlySpending(userId: widget.userId),
-        _analytics.generateInsights(userId: widget.userId),
       ]);
+
+      final summary = baseResults[0] as MonthlySummary;
+      final prediction = baseResults[1] as SpendingPrediction;
+      final insights = await _analytics.generateInsights(
+        userId: widget.userId,
+        precomputedSummary: summary,
+        precomputedPrediction: prediction,
+        month: month,
+        year: DateTime.now().year,
+      );
 
       if (mounted) {
         setState(() {
-          _summary = results[0] as MonthlySummary;
-          _prediction = results[1] as SpendingPrediction;
-          _insights = results[2] as List<SmartInsight>;
+          _summary = summary;
+          _prediction = prediction;
+          _insights = insights;
           _isLoading = false;
         });
       }
@@ -142,7 +151,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
             const Text('Financial Insights', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.1))),
+              decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha:0.1))),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _selectedMonth,
@@ -158,7 +167,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
           if (_summary != null)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text('${_summary!.transactionCount} transactions', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14)),
+              child: Text('${_summary!.transactionCount} transactions', style: TextStyle(color: Colors.white.withValues(alpha:0.5), fontSize: 14)),
             ),
           const SizedBox(height: 20),
         ],
@@ -190,13 +199,13 @@ class _InsightsScreenState extends State<InsightsScreen> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 18)),
+          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)), child: Icon(icon, color: color, size: 18)),
           const SizedBox(height: 12),
           Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 2),
-          Text(title, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+          Text(title, style: TextStyle(color: Colors.white.withValues(alpha:0.6), fontSize: 12)),
         ]),
       ),
     );
@@ -211,14 +220,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: const Color(0xFF66FCF1).withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-            child: Text(_summary!.month, style: TextStyle(color: const Color(0xFF66FCF1).withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.w600)),
+            decoration: BoxDecoration(color: const Color(0xFF66FCF1).withValues(alpha:0.1), borderRadius: BorderRadius.circular(8)),
+            child: Text(_summary!.month, style: TextStyle(color: const Color(0xFF66FCF1).withValues(alpha:0.7), fontSize: 10, fontWeight: FontWeight.w600)),
           ),
         ]),
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
           child: SpendingBarChart(dailySpending: _summary!.dailyTotals),
         ),
       ]),
@@ -240,11 +249,11 @@ class _InsightsScreenState extends State<InsightsScreen> {
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('Category Breakdown', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
       const SizedBox(height: 4),
-      Text('Tap a category to see transactions', style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12)),
+      Text('Tap a category to see transactions', style: TextStyle(color: Colors.white.withValues(alpha:0.4), fontSize: 12)),
       const SizedBox(height: 12),
       Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
         child: Column(
           children: _summary!.sortedCategories.take(5).map((cat) {
             double pct = _summary!.categoryPercentages[cat.key] ?? 0;
@@ -259,7 +268,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       displayName: displayName,
                       userId: widget.userId,
                       month: _months.indexOf(_selectedMonth) + 1,
-                      year: DateTime.now().year,
+                      year: _summary?.year ?? DateTime.now().year,
                       color: _catColor(cat.key),
                       icon: _catIcon(cat.key),
                     ),
@@ -276,15 +285,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
                       Text(displayName, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
                     ]),
                     Row(children: [
-                      Text('${pct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+                      Text('${pct.toStringAsFixed(1)}%', style: TextStyle(color: Colors.white.withValues(alpha:0.6), fontSize: 13)),
                       const SizedBox(width: 4),
-                      Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.3), size: 18),
+                      Icon(Icons.chevron_right, color: Colors.white.withValues(alpha:0.3), size: 18),
                     ]),
                   ]),
                   const SizedBox(height: 8),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(value: pct / 100, backgroundColor: Colors.white.withOpacity(0.04), valueColor: AlwaysStoppedAnimation<Color>(_catColor(cat.key)), minHeight: 6),
+                    child: LinearProgressIndicator(value: pct / 100, backgroundColor: Colors.white.withValues(alpha:0.04), valueColor: AlwaysStoppedAnimation<Color>(_catColor(cat.key)), minHeight: 6),
                   ),
                 ]),
               ),
@@ -308,15 +317,15 @@ class _InsightsScreenState extends State<InsightsScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFF1A1A2E),
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: insight.type == InsightType.warning ? Colors.orange.withOpacity(0.2) : insight.type == InsightType.positive ? Colors.green.withOpacity(0.2) : Colors.white.withOpacity(0.05)),
+            border: Border.all(color: insight.type == InsightType.warning ? Colors.orange.withValues(alpha:0.2) : insight.type == InsightType.positive ? Colors.green.withValues(alpha:0.2) : Colors.white.withValues(alpha:0.05)),
           ),
           child: Row(children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF66FCF1).withOpacity(0.08), borderRadius: BorderRadius.circular(12)), child: Icon(insight.icon, size: 20, color: const Color(0xFF66FCF1))),
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: const Color(0xFF66FCF1).withValues(alpha:0.08), borderRadius: BorderRadius.circular(12)), child: Icon(insight.icon, size: 20, color: const Color(0xFF66FCF1))),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(insight.title, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 14)),
               const SizedBox(height: 2),
-              Text(insight.description, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 12)),
+              Text(insight.description, style: TextStyle(color: Colors.white.withValues(alpha:0.6), fontSize: 12)),
             ])),
           ]),
         )),
@@ -327,7 +336,7 @@ class _InsightsScreenState extends State<InsightsScreen> {
   Widget _buildSubscriptions() {
     final grouped = <String, double>{};
     for (var sub in _summary!.subscriptions) {
-      grouped[sub.merchant] = sub.amount;
+      grouped[sub.merchant] = (grouped[sub.merchant] ?? 0) + sub.amount;
     }
 
     return Padding(
@@ -337,14 +346,14 @@ class _InsightsScreenState extends State<InsightsScreen> {
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+          decoration: BoxDecoration(color: const Color(0xFF1A1A2E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha:0.05))),
           child: Column(
             children: grouped.entries.map((e) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(children: [
                 Container(
                   width: 36, height: 36,
-                  decoration: BoxDecoration(color: const Color(0xFF26A69A).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(color: const Color(0xFF26A69A).withValues(alpha:0.1), borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.subscriptions_rounded, color: Color(0xFF26A69A), size: 18),
                 ),
                 const SizedBox(width: 12),
